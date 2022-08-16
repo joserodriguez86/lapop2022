@@ -1,0 +1,97 @@
+---
+title: "Avances Multinivel LAPOP"
+author: "José Rodríguez de la Fuente - Gonzalo Assusa"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r librerias y base, include=FALSE, echo=FALSE}
+rm(list = ls())
+
+if (!require("pacman")) install.packages("pacman") 
+
+pacman::p_load(tidyverse, kableExtra)
+
+load("bases/lapop2004_2018.RData")
+
+# Filtro países
+lapop2004_2018 <- lapop2004_2018 %>% 
+  filter(country %in% c(1, 8, 11, 13, 14, 15, 17) & wave >= 2008)
+
+```
+
+# Preparación de la base
+
+```{r prepación variables}
+
+#2008-2018
+lapop2004_2018$democracia7 <- lapop2004_2018$ing4
+lapop2004_2018$democracia_ord <- lapop2004_2018$pn4
+lapop2004_2018$reduc_desigualdad <- lapop2004_2018$ros4
+
+lapop2004_2018$country_f <- factor(lapop2004_2018$country, 
+                                   labels = c("México", "Colombia", "Perú", 
+                                              "Chile", "Uruguay", "Brasil", "Argentina"))
+
+lapop2004_2018$sexo <- factor(lapop2004_2018$q1, labels = c("Varón", "Mujer"))
+
+lapop2004_2018 <- lapop2004_2018 %>% 
+  mutate(estatus_ocup = case_when(ocup4a <= 2 & ocup1a == 3 ~ 1,
+                                  ocup4a <= 2 & ocup1a %in% c(1,2) ~ 2,
+                                  ocup4a <= 2 & ocup1a == 4 ~ 3,
+                                  ocup4a == 3 | ocup1a == 5 ~ 4,
+                                  ocup4a >= 4 ~ 5),
+         estatus_ocup_f = factor(estatus_ocup, labels = c("Patrón", "Asalariado",
+                                                          "Cuenta propia", "Desocupado",
+                                                          "Inactivo")))
+
+#2018
+lapop2004_2018$desempleados <- lapop2004_2018$redist3
+lapop2004_2018$ayuda_pobres <- lapop2004_2018$redist1
+
+lapop2004_2018 <- lapop2004_2018 %>% 
+  mutate(impuestos_ricos = case_when(country == 8 ~ redist2,
+                                     TRUE ~ redist2a))
+
+lapop2004_2018 <- lapop2004_2018 %>% 
+  mutate(urbano = factor(ur, labels = c("Urbano", "Rural")),
+         formal_f = factor(formal, labels = c("formal", "informal")))
+
+
+```
+
+
+## Casos perdidos
+
+```{r Casos perdidos}
+# Revisión de casos perdidos
+kable(round(prop.table(table(lapop2004_2018$democracia7, lapop2004_2018$wave, 
+                 useNA = "always"), margin = 2)*100, digits = 2),
+      format = "html", caption = "Democracia 7 categorías x onda") %>% 
+  kable_styling()
+
+kable(round(prop.table(table(lapop2004_2018$democracia_ord, lapop2004_2018$wave, 
+                 useNA = "always"), margin = 2)*100, digits = 2),
+      format = "html", caption = "Democracia ordinal x onda") %>% 
+  kable_styling()
+
+kable(round(prop.table(table(lapop2004_2018$reduc_desigualdad, lapop2004_2018$wave, 
+                 useNA = "always"), margin = 2)*100, digits = 2),
+      format = "html", caption = "Reducción de la desigualdad x onda") %>% 
+  kable_styling()
+
+
+kable(round(prop.table(table(lapop2004_2018$l1, lapop2004_2018$wave, 
+                 useNA = "always"), margin = 2)*100, digits = 2),
+      format = "html", caption = "Ideología x onda") %>% 
+  kable_styling()
+
+lapop2004_2018 %>% 
+  group_by(country_f, wave) %>% 
+  summarise(promedio = round(mean(l1, na.rm = T), digits = 2)) %>% 
+  pivot_wider(id_cols = country_f, names_from = wave, values_from = promedio) %>% 
+  kable() %>% 
+  kable_styling()
+
+```
+
