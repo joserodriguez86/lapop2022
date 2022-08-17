@@ -93,5 +93,7 @@ lapop2004_2018 %>%
   kable() %>% 
   kable_styling()
 
+l
+
 ```
 
