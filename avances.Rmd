@@ -2,6 +2,7 @@
 title: "Avances Multinivel LAPOP"
 author: "José Rodríguez de la Fuente - Gonzalo Assusa"
 date: "`r Sys.Date()`"
+output_dir: docs
 output: html_document
 ---
 
