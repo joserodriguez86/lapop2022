@@ -56,3 +56,44 @@ prueba <- lapop2004_2018 %>%
   adorn_percentages(denominator = "col") %>% 
   adorn_pct_formatting(digits = 1)
 
+prueba <- lapop2004_2018 %>%
+  filter(wave == 2018) %>%
+  group_by(ocupoit) %>% 
+  summarise(educacion = mean(ed, na.rm = T)) %>% 
+  view()
+
+lapop2004_2018 %>%
+  drop_na(ocupoit) %>% 
+  filter(wave == 2018) %>%
+  ggplot(aes(x=as.factor(ocupoit), y=ed, fill=ocupoit)) +
+  geom_boxplot(outlier.shape = NA, show.legend = FALSE, na.rm = T) +
+  geom_hline(aes(yintercept = median(ed, na.rm = T)), linetype = "dotted") +
+  labs(y = "Años educativos",
+       x = "Grandes grupos CIUO 08") +
+  scale_y_continuous(breaks = seq(1,20,1))
+
+ggsave("salidas/ciuo_edu.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>%
+  drop_na(estatus_ocup_f) %>% 
+  filter(wave == 2018) %>%
+  ggplot(aes(x=as.factor(estatus_ocup_f), y=ed, fill=estatus_ocup_f)) +
+  geom_boxplot(outlier.shape = NA, show.legend = FALSE, na.rm = T) +
+  geom_hline(aes(yintercept = median(ed, na.rm = T)), linetype = "dotted") +
+  labs(y = "Años educativos") +
+  scale_y_continuous(breaks = seq(1,20,1)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+
+ggsave("salidas/prueba_estatus_ed.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>%
+  drop_na(estatus_ocup_f) %>% 
+  filter(wave == 2018) %>%
+  ggplot(aes(x=as.factor(estatus_ocup_f), y=ing_decil, fill=estatus_ocup_f)) +
+  geom_boxplot(outlier.shape = NA, show.legend = FALSE, na.rm = T) +
+  geom_hline(aes(yintercept = median(ing_decil, na.rm = T)), linetype = "dotted") +
+  labs(y = "Grupo de ingresos del hogar") +
+  scale_y_continuous(breaks = seq(1,20,1)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+
+ggsave("salidas/prueba_estatus_ingresos.png", dpi = 300, type = "cairo", width = 8, height = 6)
