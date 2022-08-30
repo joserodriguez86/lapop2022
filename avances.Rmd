@@ -24,7 +24,24 @@ lapop2004_2018 <- lapop2004_2018 %>%
   filter(country %in% c(1, 8, 11, 13, 14, 15, 17) & wave >= 2008)
 
 #Bases contextuales
-paises <- read_excel("bases/agregados_empleo.xlsx", sheet = "formal")
+paises_desempleo <- read_excel("bases/datos_agregados.xlsx", sheet = "Desempleo")
+paises_informalidad <- read_excel("bases/datos_agregados.xlsx", sheet = "Informalidad")
+paises_empleopub <- read_excel("bases/datos_agregados.xlsx", sheet = "Empleo público")
+paises_brecha <- read_excel("bases/datos_agregados.xlsx", sheet = "Brecha remun")
+
+agregados <- paises_desempleo %>% 
+  left_join(paises_informalidad, by = c("country_f", "wave")) %>% 
+  left_join(paises_empleopub, by = c("country_f", "wave")) %>% 
+  left_join(paises_brecha, by = c("country_f", "wave")) %>% 
+  mutate(wave = ifelse(wave == 2013 & country_f != "Chile", 2012, wave),
+         wave = case_when(country_f == "Chile" & wave == 2006 ~ 2008,
+                          country_f == "Chile" & wave == 2009 ~ 2010,
+                          country_f == "Chile" & wave == 2011 ~ 2012,
+                          country_f == "Chile" & wave == 2013 ~ 2014,
+                          country_f == "Chile" & wave == 2015 ~ 2016,
+                          country_f == "Chile" & wave == 2017 ~ 2018,
+                          TRUE ~ wave)) %>% 
+  filter(wave >= 2008)
 
 ```
 
@@ -96,8 +113,10 @@ lapop2004_2018 <- lapop2004_2018 %>%
 #Pegado bases
 
 lapop2004_2018 <- lapop2004_2018 %>% 
-  left_join(paises, by = "country_f")
+  left_join(agregados, by = c("country_f", "wave"))
 
+rm(paises_brecha, paises_desempleo, paises_empleopub, paises_informalidad)
+ 
 ```
 
 
@@ -525,13 +544,14 @@ lapop2004_2018 %>%
   facet_wrap(~country_f, ncol = 3)
 
 ```
+
 ```{r Barras informalidad, echo=FALSE, warning=FALSE, message=FALSE}
 
 lapop2004_2018 %>%
   filter(wave==2018) %>%
   group_by(country_f) %>% 
   summarise(informal_lapop = mean(informal, na.rm = T)*100,
-            informal_ext = mean(informal_ext)) %>% 
+            informal_ext = mean(informalidad)*100) %>% 
   pivot_longer(!country_f, names_to = "tipo",
                values_to = "porcentaje") %>% 
   ggplot(aes(x=country_f, y=porcentaje, fill= tipo)) +

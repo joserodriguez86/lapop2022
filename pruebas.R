@@ -97,3 +97,15 @@ lapop2004_2018 %>%
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
 
 ggsave("salidas/prueba_estatus_ingresos.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+prueba <- agregados %>%
+  group_by(country_f, wave) %>% 
+  summarise(media = mean(informalidad, na.rm = T)) %>% 
+  pivot_wider(id_cols = country_f, names_from = wave, values_from = media)
+
+prueba <- lapop2004_2018 %>%
+  group_by(country_f, wave) %>% 
+  summarise(media = mean(brecha_remun, na.rm = T)) %>% 
+  pivot_wider(id_cols = country_f, names_from = wave, values_from = media) %>% 
+  adorn_pct_formatting(digits = 1)
