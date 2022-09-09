@@ -3,7 +3,9 @@ title: "Avances LAPOP"
 author: "José Rodríguez de la Fuente - Gonzalo Assusa"
 date: "`r Sys.Date()`"
 output:
-  rmdformats::readthedown:
+  html_document:
+    toc: True
+    toc_float: True
     code_folding: hide
 ---
 
