@@ -109,3 +109,7 @@ prueba <- lapop2004_2018 %>%
   summarise(media = mean(brecha_remun, na.rm = T)) %>% 
   pivot_wider(id_cols = country_f, names_from = wave, values_from = media) %>% 
   adorn_pct_formatting(digits = 1)
+
+lapop2004_2018 %>%
+  group_by(ideologia) %>% 
+  summarise(media = mean(democracia7, na.rm = T))

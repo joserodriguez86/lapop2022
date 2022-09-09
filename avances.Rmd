@@ -15,7 +15,7 @@ rm(list = ls())
 if (!require("pacman")) install.packages("pacman") 
 
 pacman::p_load(tidyverse, kableExtra, GDAtools, FactoMineR, VIM, janitor, gridExtra,
-               janitor, readxl)
+               janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme)
 
 load("bases/lapop2004_2018.RData")
 
@@ -85,26 +85,29 @@ lapop2004_2018$desempleados <- car::recode(lapop2004_2018$desempleados,
 
 lapop2004_2018$ayuda_pobres <- lapop2004_2018$redist1
 
-lapop2004_2018 <- lapop2004_2018 %>% 
-  mutate(redist2_inv = car::recode(redist2, "1=7; 2=6; 3=5; 4=4; 5=3; 6=2; 7=1"),
-         impuestos_ricos = case_when(country == 8 ~ redist2_inv,
-                                     TRUE ~ redist2a),
-         urbano = factor(ur, labels = c("Urbano", "Rural")),
-         informal = car::recode(formal, "1=0; 2=1"),
-         formal_f = factor(formal, labels = c("formal", "informal")),
-         formal_estado = case_when(formal == 1 ~ 1,
+lapop2004_2018 <- lapop2004_2018 %>%
+  mutate(redist2_inv = ifelse(wave == 2018, car::recode(redist2, "1=7; 2=6; 3=5; 4=4; 5=3; 
+                                                        6=2; 7=1"), NA),
+         impuestos_ricos = ifelse(wave == 2018, case_when(country == 8 ~ redist2_inv,
+                                     TRUE ~ redist2a), NA),
+         urbano = ifelse(wave == 2018, factor(ur, labels = c("Urbano", "Rural")), NA),
+         informal = ifelse(wave == 2018, car::recode(formal, "1=0; 2=1"), NA),
+         formal_f = ifelse(wave == 2018, factor(formal, labels = c("formal", "informal")), NA),
+         formal_estado = ifelse(wave == 2018, case_when(formal == 1 ~ 1,
                                    formal == 2 ~ 2,
                                    categoria_ocup >= 5 ~ 3,
-                                   TRUE ~ NA_real_),
-         formal_estado = factor(formal_estado, labels = c("Formal", "Informal",
-                                                          "No ocupados")),
-         estatus_ocup = case_when(ocupoit <= 2 ~ 1,
+                                   TRUE ~ NA_real_), NA),
+         formal_estado = factor(formal_estado, labels = c("Formal",
+                                                                               "Informal",
+                                                                               "No ocupados")),
+         estatus_ocup = ifelse(wave == 2018, case_when(ocupoit <= 2 ~ 1,
                                   ocupoit > 2 & ocupoit < 4 ~ 2,
                                   ocupoit %in% c(5, 7, 8, 10) ~ 3,
                                   ocupoit %in% c(6, 9) ~ 4,
                                   categoria_ocup >= 5 ~ 5,
-                                  TRUE ~ NA_real_),
-         estatus_ocup_f = factor(estatus_ocup, labels = c("Directivos-Profesionales",
+                                  TRUE ~ NA_real_), NA),
+         estatus_ocup_f = factor(estatus_ocup, labels =
+                                                        c("Directivos-Profesionales",
                                                           "Técnicos-administrativos-vendedores",
                                                           "Trabajadores manuales calificados",
                                                           "Trabajadores manuales no calificados",
@@ -413,7 +416,58 @@ Las variables de *Ayuda económica del gobierno* y *Transferencias condicionadas
 
 # Descriptivos
 
-## Boxplot (año y país)  
+## Tablas resumen 
+
+```{r tablas, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+variables_seleccion <- lapop2004_2018 %>% 
+  select(democracia7, reduc_desigualdad, desempleados, ayuda_pobres, impuestos_ricos,
+         categoria_ocup_f, formal_estado, estatus_ocup_f, ideologia_imp, sexo, 
+         q2, ed, urbano, desempleo, informalidad, empleo_publico, brecha_remun, country_f,
+         wave)
+
+variables_seleccion$informalidad <- variables_seleccion$informalidad * 100
+variables_seleccion$desempleo <- variables_seleccion$desempleo * 100
+variables_seleccion$empleo_publico <- variables_seleccion$empleo_publico * 100
+variables_seleccion$brecha_remun <- variables_seleccion$brecha_remun * 100
+
+theme_gtsummary_language("es")
+
+variables_seleccion %>%
+  tbl_summary(by = wave,
+              type = list(c(democracia7, reduc_desigualdad, 
+                          desempleados, ayuda_pobres,
+                          impuestos_ricos) ~ "continuous"),
+              label = c(democracia7 ~ "Acuerdo con democracia", 
+                           reduc_desigualdad ~ "Acuerdo con políticas de 
+                           reducción de desigualdad", 
+                          desempleados ~ "Desempleo como fenómeno voluntario",
+                          ayuda_pobres ~ "Los gobiernos deben invertir en ayudar 
+                          a los pobres",
+                          impuestos_ricos ~ "Injusto que los ricos paguen altos
+                          impuestos",
+                          categoria_ocup_f ~ "Categoría ocupacional",
+                          formal_estado ~ "Formalidad",
+                          estatus_ocup_f ~ "Estatus ocupacional",
+                          ideologia_imp ~ "Ideología (der-izq)",
+                          sexo ~ "Sexo",
+                          q2 ~ "Edad",
+                          ed ~ "Años educativos",
+                          urbano ~ "Región",
+                          desempleo ~ "Nivel de desempleo",
+                          informalidad ~ "Nivel de informalidad",
+                          empleo_publico ~ "Nivel de empleo público",
+                          brecha_remun ~ "Brecha informales / asalariados reg.",
+                          country_f ~ "País"
+                          ),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})", 
+                                  all_categorical() ~ "{n} ({p}%)"),
+                 digits = list(all_categorical() ~ c(0, 1)),
+  							 missing = "no") %>% 
+  add_overall(col_label = "**Total**", last = TRUE)
+```
+
+
+## Boxplot y gráficos de medias (año y país)  
 
 ```{r Análisis de boxplot por año y país democracia, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -432,6 +486,26 @@ lapop2004_2018 %>%
         axis.text.x = element_text(size = 8),
         axis.text.y = element_text(size = 8)) +
   scale_y_continuous(breaks=seq(1, 7, 1)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(democracia7) %>%
+  group_by(country_f, wave) %>% 
+  summarise(media = mean(democracia7)) %>% 
+  ggplot(aes(x=as.factor(wave), y=media, group = 1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Democracia como mejor forma de gobierno por año y país", 
+       y = "Aprobación de la democracia",
+       caption = "Elaboración propia en base a LAPOP 2008-2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ```
@@ -455,6 +529,26 @@ lapop2004_2018 %>%
   scale_y_continuous(breaks=seq(1, 7, 1)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(reduc_desigualdad) %>%
+  group_by(country_f, wave) %>% 
+  summarise(media = mean(reduc_desigualdad)) %>% 
+  ggplot(aes(x=as.factor(wave), y=media, group = 1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Acuerdo con reducción de la desigualdad entre ricos y pobres por año y país", 
+       y = "Aprobación de reducción de la desigualdad",
+       caption = "Elaboración propia en base a LAPOP 2008-2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
 ```
 
 ## Boxplot 2018  
@@ -468,6 +562,8 @@ desempleados <- lapop2004_2018 %>%
   ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=desempleados, 
              fill= country_f)) +
   geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+  stat_summary(fun.y = mean, geom ="point", aes(group = 1), show.legend = F) +
+  stat_summary(fun.y = mean, geom = "line", linetype = "dotted", aes(group = 1)) +
   labs(title = "Los desempleados no pueden encontrar \ntrabajo solo por su voluntad", 
        y = "Nivel de acuerdo") +
   theme(plot.title = element_text(size = 10, face = "bold"),
@@ -484,6 +580,8 @@ ayuda_pobres <- lapop2004_2018 %>%
   drop_na(ayuda_pobres) %>% 
   ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=ayuda_pobres, fill= country_f)) +
   geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+  stat_summary(fun.y = mean, geom ="point", aes(group = 1), show.legend = F) +
+  stat_summary(fun.y = mean, geom = "line", linetype = "dotted", aes(group = 1)) +
   labs(title = "Los gobiernos deben gastar más en el \ncombate de la pobreza", 
        y = "Nivel de acuerdo") +
   theme(plot.title = element_text(size = 10, face = "bold"),
@@ -501,6 +599,8 @@ impuestos_ricos <- lapop2004_2018 %>%
   ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), 
              y=impuestos_ricos, fill= country_f)) +
   geom_boxplot(outlier.shape = NA, show.legend = FALSE) +
+  stat_summary(fun.y = mean, geom ="point", aes(group = 1), show.legend = F) +
+  stat_summary(fun.y = mean, geom = "line", linetype = "dotted", aes(group = 1)) +
   labs(title = "Los ricos paguen mucho en impuestos pero \nreciban poco en servicios del Estado", 
        y = "Nivel de acuerdo") +
   theme(plot.title = element_text(size = 10, face = "bold"),
@@ -715,6 +815,27 @@ lapop2004_2018 %>%
   scale_y_continuous(breaks=seq(1, 7, 1), limits = c(2,5)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(desempleados, estatus_ocup) %>% 
+  group_by(country_f, estatus_ocup_f) %>% 
+  summarise(media = mean(desempleados)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Los desempleados no pueden encontrar trabajo solo por su voluntad (media)", 
+       y = "Nivel de acuerdo",
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(2,5)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
 
 #ayuda pobres
 
@@ -745,6 +866,27 @@ lapop2004_2018 %>%
   group_by(country_f, formal_estado) %>% 
   summarise(media = mean(ayuda_pobres)) %>% 
   ggplot(aes(x=formal_estado, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Los gobiernos deben gastar más en el combate de la pobreza (media)", 
+       y = "Nivel de acuerdo",
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(ayuda_pobres, estatus_ocup) %>% 
+  group_by(country_f, estatus_ocup_f) %>% 
+  summarise(media = mean(ayuda_pobres)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=media, group=1)) +
   geom_line(size = 0.5) +
   geom_point(aes(y=media), size = 2) +
   labs(title = "Los gobiernos deben gastar más en el combate de la pobreza (media)", 
@@ -805,6 +947,28 @@ lapop2004_2018 %>%
   scale_y_continuous(breaks=seq(1, 7, 1), limits = c(3,6)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(impuestos_ricos, estatus_ocup) %>% 
+  group_by(country_f, estatus_ocup_f) %>% 
+  summarise(media = mean(impuestos_ricos)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Los ricos paguen mucho en impuestos pero reciban poco en servicios del Estado (media)", 
+       y = "Nivel de acuerdo",
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(3,6)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+
 #Reducción desigualdad
 
 lapop2004_2018 %>% 
@@ -829,6 +993,31 @@ lapop2004_2018 %>%
   scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(reduc_desigualdad, estatus_ocup) %>% 
+  group_by(country_f, estatus_ocup_f) %>% 
+  summarise(media = mean(reduc_desigualdad)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Acuerdo con reducción de la desigualdad entre ricos y pobres según categoría laboral por país (media)", 
+       subtitle = "Variable reduc_desigualdad sin imputar",
+       y = "Aprobación de reducción de la desigualdad",
+       caption = "Elaboración propia en base a LAPOP 2008-2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+
+
 #Democracia
 lapop2004_2018 %>% 
   bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
@@ -851,5 +1040,236 @@ lapop2004_2018 %>%
   scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(democracia7, estatus_ocup) %>% 
+  group_by(country_f, estatus_ocup_f) %>% 
+  summarise(media = mean(democracia7)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Democracia como mejor forma de gobierno según categoría laboral por país (media)", 
+       subtitle = "Variable democracia7 sin imputar",
+       caption = "Elaboración propia en base a LAPOP 2008-2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(breaks=seq(1, 7, 1), limits = c(4,7)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
 
 ```
+
+# Modelos Multinivel 2008-2018
+
+
+```{r Modelo multinivel ICC, echo=FALSE, warning=FALSE, message=FALSE}
+
+base_ml <- lapop2004_2018 %>% 
+  mutate(pais_anio = paste(country_f, wave, sep = "_")) %>% 
+  drop_na(democracia7, reduc_desigualdad, categoria_ocup_f, ideologia_imp, sexo, 
+         q2, ed, desempleo, informalidad, empleo_publico, brecha_remun)
+
+democracia_null <- lmer(democracia7 ~ 1 + (1 | pais_anio), data = base_ml)
+
+reduc_desigualdad_null <- lmer(reduc_desigualdad ~ 1 + (1 | pais_anio), data = base_ml)
+
+```
+
+El **ICC** para la variable objetivo de _acuerdo con la democracia_ es de **`r round(ICC(democracia_null), digits = 3)`**.  
+
+El **ICC** para la variable objetivo de _reducción de la desigualdad_ es de **`r round(ICC(reduc_desigualdad_null), digits = 3)`**.
+
+
+```{r Centrado de variables, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Centrado de variables
+base_ml$sexo_dic <- car::recode(base_ml$sex, "2=0")
+
+base_ml$patron <- ifelse(base_ml$categoria_ocup == 1, 1, 0) 
+base_ml$asal_pub <- ifelse(base_ml$categoria_ocup == 2, 1, 0) 
+base_ml$asal_pri <- ifelse(base_ml$categoria_ocup == 3, 1, 0)
+base_ml$cuenta_prop <- ifelse(base_ml$categoria_ocup == 4, 1, 0)
+base_ml$desocupado <- ifelse(base_ml$categoria_ocup == 5, 1, 0)
+
+base_ml <- base_ml %>% 
+  mutate(sexo_cwc = sexo_dic - ave(sexo_dic, pais_anio),
+         edad_cwc = q2 - ave(q2, pais_anio, FUN=function(x) mean(x, na.rm=T)),
+         educ_cwc = ed - ave(ed, pais_anio, FUN=function(x) mean(x, na.rm=T)),
+         patron_cwc = patron - ave(patron, pais_anio, 
+                                   FUN=function(x) mean(x, na.rm=T)),
+         asal_pub_cwc = asal_pub - ave(asal_pub, pais_anio, 
+                                   FUN=function(x) mean(x, na.rm=T)),
+         asal_pri_cwc = asal_pri - ave(asal_pri, pais_anio, 
+                                   FUN=function(x) mean(x, na.rm=T)),
+         cuenta_prop_cwc = cuenta_prop - ave(cuenta_prop, pais_anio, 
+                                   FUN=function(x) mean(x, na.rm=T)),
+         desocupado_cwc = desocupado - ave(desocupado, pais_anio, 
+                                   FUN=function(x) mean(x, na.rm=T)),
+         ideologia_cwc = ideologia_imp - ave(ideologia_imp, pais_anio),
+         desempleo_cgm = (desempleo - mean(desempleo))*100,
+         informalidad_cgm = (informalidad - mean(informalidad))*100,
+         empleo_pub_cgm = (empleo_publico - mean(empleo_publico))*100,
+         brecha_remun_cgm = (brecha_remun - mean(brecha_remun))*100)
+
+```
+
+
+```{r Multinivel democracia, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+
+democracia_ind_grup <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
+                         data = base_ml)
+
+democracia_ind_grup_int <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 | pais_anio), 
+                         data = base_ml)
+
+democracia_random_apub <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pub_cwc | pais_anio), 
+                         data = base_ml)
+
+democracia_random_apri <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pri_cwc | pais_anio), 
+                         data = base_ml)
+
+democracia_random_cuent <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + cuenta_prop_cwc | pais_anio), 
+                         data = base_ml)
+
+democracia_random_desoc <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + desocupado_cwc | pais_anio), 
+                         data = base_ml)
+
+htmlreg(list(democracia_ind_grup, democracia_ind_grup_int, democracia_random_apub,
+             democracia_random_apri, democracia_random_cuent, democracia_random_desoc),
+        custom.model.names = c("Efectos fijos", "Efectos fijos + int", "Random_apub", "Random_apri", "Random_cuent", "Random_desoc"),
+        caption = "Democracia",
+        caption.above = T,
+        type = "html", doctype = FALSE)
+
+```
+
+
+```{r ajustes 1, warning=FALSE, message=FALSE, echo=FALSE}
+anova(democracia_null, democracia_ind_grup)
+anova(democracia_ind_grup, democracia_ind_grup_int)
+anova(democracia_ind_grup_int, democracia_random_apub)
+anova(democracia_ind_grup_int, democracia_random_apri)
+anova(democracia_ind_grup_int, democracia_random_cuent)
+anova(democracia_ind_grup_int, democracia_random_desoc)
+
+```
+
+
+```{r Pseudo R2 1, echo=FALSE, warning=FALSE, message=FALSE}
+
+varcomp_0=as.data.frame(VarCorr(democracia_null))
+tau00_0=varcomp_0[1,4]
+sigma2_0=varcomp_0[2,4]
+
+varcomp_1=as.data.frame(VarCorr(democracia_ind_grup))
+tau00_1=varcomp_1[1,4]
+sigma2_1=varcomp_1[2,4]
+
+varcomp_2=as.data.frame(VarCorr(democracia_ind_grup_int))
+tau00_2=varcomp_2[1,4]
+sigma2_2=varcomp_2[2,4]
+
+varcomp_3=as.data.frame(VarCorr(democracia_random_apub))
+tau00_3=varcomp_3[1,4]
+sigma2_3=varcomp_3[2,4]
+
+varcomp_4=as.data.frame(VarCorr(democracia_random_apri))
+tau00_4=varcomp_4[1,4]
+sigma2_4=varcomp_4[2,4]
+
+
+R2_ind_m1=(sigma2_0-sigma2_1)/sigma2_0
+R2_grup_m1=(tau00_0-tau00_1)/tau00_0
+
+R2_ind_m2=(sigma2_0-sigma2_2)/sigma2_0
+R2_grup_m2=(tau00_0-tau00_2)/tau00_0
+
+R2_ind_m3=(sigma2_0-sigma2_3)/sigma2_0
+R2_grup_m3=(tau00_0-tau00_3)/tau00_0
+
+R2_ind_m4=(sigma2_0-sigma2_4)/sigma2_0
+R2_grup_m4=(tau00_0-tau00_4)/tau00_0
+
+```
+
+
+**note**
+El test de devianza muestra que los modelos de pendiente aleatoria para los **cuentapropia** y para **desocupados** no mejoran el ajuste.
+El pseudo r2 para el segundo nivel (países años) en el modelo con efectos fijos + interacción es de **`r R2_grup_m2`**, el del modelo de pendiente aleatoria para empleo público es de **`r R2_grup_m3`** y en el de empleo privado es de **`r R2_grup_m3`**.
+
+
+
+```{r Multinivel reducción desigualdad, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+
+reduc_desigualdad_ind <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + (1 | pais_anio), data = base_ml)
+
+reduc_desigualdad_ind_grup <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
+                         data = base_ml)
+
+reduc_desigualdad_random_apub <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 + asal_pub_cwc | pais_anio), 
+                         data = base_ml)
+
+reduc_desigualdad_random_apri <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 + asal_pri_cwc | pais_anio), 
+                         data = base_ml)
+
+reduc_desigualdad_random_cuent <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 + cuenta_prop_cwc | pais_anio), 
+                         data = base_ml)
+
+htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup, reduc_desigualdad_random_apub,
+             reduc_desigualdad_random_apri, reduc_desigualdad_random_cuent),
+        custom.model.names = c("Ind","Ind+grup","Random_apub", "Random_apri", "Random_cuent"),
+        caption = "Reducción de la desigualdad",
+        caption.above = T,
+        type = "html", doctype = FALSE)
+
+```
+
+
+```{r ajustes 2, warning=FALSE, message=FALSE, echo=FALSE}
+anova(reduc_desigualdad_null, reduc_desigualdad_ind)
+anova(reduc_desigualdad_ind, reduc_desigualdad_ind_grup)
+anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_apub)
+anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_apri)
+anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_cuent)
+
+
+```
+
+
