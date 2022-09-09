@@ -2,10 +2,9 @@
 title: "Avances LAPOP"
 author: "José Rodríguez de la Fuente - Gonzalo Assusa"
 date: "`r Sys.Date()`"
-output: 
-  html_document:
-    toc: true
-    toc_float: true
+output:
+  rmdformats::readthedown:
+    code_folding: hide
 ---
 
 
@@ -1121,6 +1120,11 @@ base_ml <- base_ml %>%
 
 ```{r Multinivel democracia, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 
+democracia_ind <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + (1 | pais_anio), 
+                         data = base_ml)
+
 democracia_ind_grup <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
@@ -1130,7 +1134,8 @@ democracia_ind_grup <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_p
 democracia_ind_grup_int <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
-                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 | pais_anio), 
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 | pais_anio), 
                          data = base_ml)
 
 democracia_random_apub <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
@@ -1157,9 +1162,11 @@ democracia_random_desoc <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + as
                          empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + desocupado_cwc | pais_anio), 
                          data = base_ml)
 
-htmlreg(list(democracia_ind_grup, democracia_ind_grup_int, democracia_random_apub,
-             democracia_random_apri, democracia_random_cuent, democracia_random_desoc),
-        custom.model.names = c("Efectos fijos", "Efectos fijos + int", "Random_apub", "Random_apri", "Random_cuent", "Random_desoc"),
+htmlreg(list(democracia_ind, democracia_ind_grup, democracia_ind_grup_int,
+             democracia_random_apub, democracia_random_apri, democracia_random_cuent,
+             democracia_random_desoc),
+        custom.model.names = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
+                               "Random_apri", "Random_cuent", "Random_desoc"),
         caption = "Democracia",
         caption.above = T,
         type = "html", doctype = FALSE)
@@ -1168,7 +1175,8 @@ htmlreg(list(democracia_ind_grup, democracia_ind_grup_int, democracia_random_apu
 
 
 ```{r ajustes 1, warning=FALSE, message=FALSE, echo=FALSE}
-anova(democracia_null, democracia_ind_grup)
+anova(democracia_null, democracia_ind)
+anova(democracia_ind, democracia_ind_grup)
 anova(democracia_ind_grup, democracia_ind_grup_int)
 anova(democracia_ind_grup_int, democracia_random_apub)
 anova(democracia_ind_grup_int, democracia_random_apri)
@@ -1184,21 +1192,25 @@ varcomp_0=as.data.frame(VarCorr(democracia_null))
 tau00_0=varcomp_0[1,4]
 sigma2_0=varcomp_0[2,4]
 
-varcomp_1=as.data.frame(VarCorr(democracia_ind_grup))
+varcomp_1=as.data.frame(VarCorr(democracia_ind))
 tau00_1=varcomp_1[1,4]
 sigma2_1=varcomp_1[2,4]
 
-varcomp_2=as.data.frame(VarCorr(democracia_ind_grup_int))
+varcomp_2=as.data.frame(VarCorr(democracia_ind_grup))
 tau00_2=varcomp_2[1,4]
 sigma2_2=varcomp_2[2,4]
 
-varcomp_3=as.data.frame(VarCorr(democracia_random_apub))
+varcomp_3=as.data.frame(VarCorr(democracia_ind_grup_int))
 tau00_3=varcomp_3[1,4]
 sigma2_3=varcomp_3[2,4]
 
-varcomp_4=as.data.frame(VarCorr(democracia_random_apri))
+varcomp_4=as.data.frame(VarCorr(democracia_random_apub))
 tau00_4=varcomp_4[1,4]
 sigma2_4=varcomp_4[2,4]
+
+varcomp_5=as.data.frame(VarCorr(democracia_random_apri))
+tau00_5=varcomp_5[1,4]
+sigma2_5=varcomp_5[2,4]
 
 
 R2_ind_m1=(sigma2_0-sigma2_1)/sigma2_0
@@ -1216,9 +1228,14 @@ R2_grup_m4=(tau00_0-tau00_4)/tau00_0
 ```
 
 
-**note**
+**Importante**  
 El test de devianza muestra que los modelos de pendiente aleatoria para los **cuentapropia** y para **desocupados** no mejoran el ajuste.
-El pseudo r2 para el segundo nivel (países años) en el modelo con efectos fijos + interacción es de **`r R2_grup_m2`**, el los modelos de pendiente aleatoria es de **`r R2_grup_m3`**.
+El pseudo r2 para el segundo nivel (países años) 
+
+* en el modelo con predictores individuales es de **`r R2_grup_m1`**,  
+* en el modelo de predictores individuales y grupales es de  **`r R2_grup_m2`**, 
+* en el modelo con interacciones es de **`r R2_grup_m3`**,
+* en el los modelos de pendiente aleatoria es de **`r R2_grup_m4`**.
 
 
 
@@ -1228,8 +1245,9 @@ reduc_desigualdad_ind <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + (1 | pais_anio), data = base_ml)
 
-reduc_desigualdad_ind_grup <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
-                         cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
+reduc_desigualdad_ind_grup <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc +
+                                     asal_pri_cwc + cuenta_prop_cwc + desocupado_cwc +
+                                     ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
                          data = base_ml)
@@ -1251,13 +1269,13 @@ reduc_desigualdad_random_cuent <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 + cuenta_prop_cwc | pais_anio), 
                          data = base_ml)
-
-htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup, reduc_desigualdad_random_apub,
-             reduc_desigualdad_random_apri, reduc_desigualdad_random_cuent),
-        custom.model.names = c("Ind","Ind+grup","Random_apub", "Random_apri", "Random_cuent"),
+htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup),
+        custom.model.names = c("Ind","Ind+grup"),
         caption = "Reducción de la desigualdad",
         caption.above = T,
         type = "html", doctype = FALSE)
+
+
 
 ```
 
@@ -1265,10 +1283,9 @@ htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup, reduc_desigualda
 ```{r ajustes 2, warning=FALSE, message=FALSE, echo=FALSE}
 anova(reduc_desigualdad_null, reduc_desigualdad_ind)
 anova(reduc_desigualdad_ind, reduc_desigualdad_ind_grup)
-anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_apub)
-anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_apri)
-anova(reduc_desigualdad_ind_grup, reduc_desigualdad_random_cuent)
-
 
 ```
+
+**Importante**  
+Para la variable objetivo *reducción de la desigualdad* la prueba de devianza muestra que el modelo con variables contextuales agregadas no mejora el ajuste por sobre el modelo de variables individuales.  
 
