@@ -1218,7 +1218,7 @@ R2_grup_m4=(tau00_0-tau00_4)/tau00_0
 
 **note**
 El test de devianza muestra que los modelos de pendiente aleatoria para los **cuentapropia** y para **desocupados** no mejoran el ajuste.
-El pseudo r2 para el segundo nivel (países años) en el modelo con efectos fijos + interacción es de **`r R2_grup_m2`**, el del modelo de pendiente aleatoria para empleo público es de **`r R2_grup_m3`** y en el de empleo privado es de **`r R2_grup_m3`**.
+El pseudo r2 para el segundo nivel (países años) en el modelo con efectos fijos + interacción es de **`r R2_grup_m2`**, el los modelos de pendiente aleatoria es de **`r R2_grup_m3`**.
 
 
 
