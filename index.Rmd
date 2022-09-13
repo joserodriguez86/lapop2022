@@ -16,7 +16,7 @@ rm(list = ls())
 if (!require("pacman")) install.packages("pacman") 
 
 pacman::p_load(tidyverse, kableExtra, GDAtools, FactoMineR, VIM, janitor, gridExtra,
-               janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme)
+               janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme, plm)
 
 load("bases/lapop2004_2018.RData")
 
@@ -1290,4 +1290,76 @@ anova(reduc_desigualdad_ind, reduc_desigualdad_ind_grup)
 
 **Importante**  
 Para la variable objetivo *reducción de la desigualdad* la prueba de devianza muestra que el modelo con variables contextuales agregadas no mejora el ajuste por sobre el modelo de variables individuales.  
+
+
+# Modelos de efectos fijos (2018) 
+
+
+```{r modelos efectos fijos 1, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
+
+lapop2018 <- lapop2004_2018 %>% 
+  filter(wave == 2018)
+
+lapop2018$estatus_ocup_f <- relevel(lapop2018$estatus_ocup_f, ref = "No ocupados")
+lapop2018$formal_estado <- relevel(lapop2018$formal_estado, ref = "No ocupados")
+lapop2018$categoria_ocup_f <- relevel(lapop2018$categoria_ocup_f, ref = "Inactivo")
+
+democracia_fijo <- plm(democracia7 ~ categoria_ocup_f + formal_estado + estatus_ocup_f +
+                         ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desigualdad_fijo <- plm(reduc_desigualdad ~ categoria_ocup_f + formal_estado +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desempleados_fijo <- plm(desempleados ~ categoria_ocup_f + formal_estado +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+ayuda_pobres_fijo <- plm(ayuda_pobres ~ categoria_ocup_f + formal_estado +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+impuestos_ricos_fijo <- plm(impuestos_ricos ~ categoria_ocup_f + formal_estado +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
+        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+        caption = "Con variables laborales",
+        caption.above = T,
+        type = "html", doctype = FALSE)
+
+```
+
+
+```{r modelos efectos fijos 2, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
+
+democracia_fijo <- plm(democracia7 ~ formal_estado +
+                         ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desigualdad_fijo <- plm(reduc_desigualdad ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desempleados_fijo <- plm(desempleados ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+ayuda_pobres_fijo <- plm(ayuda_pobres ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+impuestos_ricos_fijo <- plm(impuestos_ricos ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
+        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+        caption = "Sin variables laborales",
+        caption.above = T,
+        type = "html", doctype = FALSE)
+
+```
 
