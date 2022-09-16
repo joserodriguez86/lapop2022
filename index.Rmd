@@ -1412,6 +1412,7 @@ lapop2018 <- lapop2004_2018 %>%
 
 lapop2018$estatus_ocup_f <- relevel(lapop2018$estatus_ocup_f, ref = "No ocupados")
 lapop2018$formal_estado2 <- relevel(lapop2018$formal_estado2, ref = "No ocupados")
+lapop2018$formal_estado <- relevel(lapop2018$formal_estado, ref = "Inactivo")
 lapop2018$categoria_ocup_f <- relevel(lapop2018$categoria_ocup_f, ref = "Inactivo")
 
 democracia_fijo <- plm(democracia7 ~ categoria_ocup_f + formal_estado2 + estatus_ocup_f +
@@ -1436,6 +1437,11 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ categoria_ocup_f + formal_estado2 
 
 htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+        custom.coef.names = c("Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia", "Desocupado", "Formal", "Informal",
+                              "Directivos-profesionales", "Téc-adm-vend", "Trab. Man. calif",
+                              "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
+                              "Varón", "Edad", "Años educ."),
         caption = "Con variables laborales",
         caption.above = T,
         type = "html", doctype = T, file = "salidas/efectosfijos1.doc")
@@ -1489,6 +1495,8 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ formal_estado +
 
 htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+        custom.coef.names = c("Formal", "Informal", "Desocupado", "Ideología (der-izq)", "Urbano",
+                              "Varón", "Edad", "Años educ."),
         caption = "Sin variables laborales",
         caption.above = T,
         type = "html", doctype = T, file = "salidas/efectosfijos2.doc")
@@ -1561,6 +1569,9 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ estatus_ocup_f +
 
 htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+        custom.coef.names = c("Directivos-profesionales", "Téc-adm-vend", "Trab. Man. calif",
+                              "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
+                              "Varón", "Edad", "Años educ."),
         caption = "Con variable de estatus",
         caption.above = T,
         type = "html", doctype = T, file = "salidas/efectosfijos3.doc")
