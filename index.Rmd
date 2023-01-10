@@ -16,7 +16,8 @@ rm(list = ls())
 if (!require("pacman")) install.packages("pacman") 
 
 pacman::p_load(tidyverse, kableExtra, GDAtools, FactoMineR, VIM, janitor, gridExtra,
-               janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme, plm)
+               janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme, plm, performance,
+               sjPlot, jtools)
 
 load("bases/lapop2004_2018.RData")
 
@@ -55,6 +56,10 @@ lapop2004_2018$democracia7 <- lapop2004_2018$ing4
 lapop2004_2018$democracia_ord <- lapop2004_2018$pn4
 lapop2004_2018$reduc_desigualdad <- lapop2004_2018$ros4
 
+lapop2004_2018 <- lapop2004_2018 %>% 
+  mutate(voto_pasado = car::recode(vb2, "1=1; 2=0"),
+         voto_presente = car::recode(vb20, "1=0; c(2,3,4)=1"))
+
 lapop2004_2018$country_f <- factor(lapop2004_2018$country, 
                                    labels = c("México", "Colombia", "Perú", 
                                               "Chile", "Uruguay", "Brasil", "Argentina"))
@@ -91,6 +96,12 @@ lapop2004_2018 <- lapop2004_2018 %>%
                                                         6=2; 7=1"), NA),
          impuestos_ricos = ifelse(wave == 2018, case_when(country == 8 ~ redist2_inv,
                                      TRUE ~ redist2a), NA),
+         corrup_func = car::recode(exc7, "1:2=0; 3:4=1"),
+         corrup_pol = car::recode(exc7new, "1:2=1; 3:5=0"),
+         golpe = car::recode(jc13, "2=1; 1=0"),
+         cierre_congreso = car::recode(jc15a, "2=1; 1=0"),
+         cierre_corte = car::recode(jc16a, "2=1; 1=0"),
+         simpatiza_partido = car::recode(vb10, "2=0"),
          urbano = ifelse(wave == 2018, factor(ur, labels = c("Urbano", "Rural")), NA),
          informal = ifelse(wave == 2018, car::recode(formal, "1=0; 2=1"), NA),
          formal_f = ifelse(wave == 2018, factor(formal, labels = c("formal", "informal")), NA),
@@ -423,10 +434,12 @@ Las variables de *Ayuda económica del gobierno* y *Transferencias condicionadas
 
 ```{r tablas, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 variables_seleccion <- lapop2004_2018 %>% 
-  select(democracia7, reduc_desigualdad, desempleados, ayuda_pobres, impuestos_ricos,
-         categoria_ocup_f, formal_estado, estatus_ocup_f, ideologia_imp, sexo, 
-         q2, ed, urbano, desempleo, informalidad, empleo_publico, brecha_remun, country_f,
-         wave)
+  select(democracia7, reduc_desigualdad, voto_pasado, voto_presente, desempleados, 
+         ayuda_pobres, impuestos_ricos, corrup_func, golpe, cierre_congreso,
+         cierre_corte, simpatiza_partido,
+         categoria_ocup_f, formal_estado, estatus_ocup_f,
+         ideologia_imp, sexo, q2, ed, urbano, desempleo, informalidad, empleo_publico,
+         brecha_remun, country_f, wave)
 
 variables_seleccion$informalidad <- variables_seleccion$informalidad * 100
 variables_seleccion$desempleo <- variables_seleccion$desempleo * 100
@@ -440,14 +453,21 @@ variables_seleccion %>%
               type = list(c(democracia7, reduc_desigualdad, 
                           desempleados, ayuda_pobres,
                           impuestos_ricos) ~ "continuous"),
-              label = c(democracia7 ~ "Acuerdo con democracia", 
+              label = c(democracia7 ~ "Acuerdo con democracia",
                            reduc_desigualdad ~ "Acuerdo con políticas de 
                            reducción de desigualdad", 
+                        voto_pasado ~ "Voto pasado",
+                        voto_presente ~ "Voto presente",
                           desempleados ~ "Desempleo como fenómeno voluntario",
                           ayuda_pobres ~ "Los gobiernos deben invertir en ayudar 
                           a los pobres",
                           impuestos_ricos ~ "Injusto que los ricos paguen altos
                           impuestos",
+                        corrup_func ~ "Generalización corrupción",
+                        golpe ~ "Golpe militar por corrupción",
+                        cierre_congreso ~ "Aprobación de cierre del congreso",
+                        cierre_corte ~ "Aprobación de cierre de la corte",
+                        simpatiza_partido ~ "Simpatía por partido político",
                           categoria_ocup_f ~ "Categoría ocupacional",
                           formal_estado ~ "Formalidad",
                           estatus_ocup_f ~ "Estatus ocupacional",
@@ -565,6 +585,66 @@ ggsave(filename = "salidas/medias_desigualdad.png", dpi = 300, type = "cairo", w
 
 ```
 
+
+```{r Análisis barras por año y país voto pasado, echo=FALSE, warning=FALSE, message=FALSE}
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_pasado) %>%
+  group_by(country_f, wave, voto_pasado) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=as.factor(wave), y=porcentaje, fill= as.factor(voto_pasado))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones pasadas por año y país", 
+       caption = "Elaboración propia en base a LAPOP 2008-2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/barras_voto_pasado.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+```
+
+
+```{r Análisis barras por año y país voto presente, echo=FALSE, warning=FALSE, message=FALSE}
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_presente) %>%
+  group_by(country_f, wave, voto_presente) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=as.factor(wave), y=porcentaje, fill= as.factor(voto_presente))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones presentes por año y país", 
+       caption = "Elaboración propia en base a LAPOP 2008-2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/barras_voto_presente.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+```
+
 ## Boxplot 2018  
 
 ```{r Análisis de boxplot 2018, echo=FALSE, warning=FALSE, message=FALSE}
@@ -637,6 +717,134 @@ ggsave(filename = "salidas/boxplot_objetivo2018.png", dpi = 300, type = "cairo",
        boxplot_objetivo2018)
 
 
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  filter(wave == 2018) %>% 
+  drop_na(corrup_func) %>%
+  group_by(country_f, wave, corrup_func) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=porcentaje, 
+             fill= as.factor(corrup_func))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Generalizado', 'No generalizado'))+
+  labs(title = "Nivel de corrupción de los funcionarios públicos", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Nivel de corrupción") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) 
+
+ggsave(filename = "salidas/barras_corrupcion.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  filter(wave == 2018) %>% 
+  drop_na(golpe) %>%
+  group_by(country_f, wave, golpe) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=porcentaje, 
+             fill= as.factor(golpe))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de golpe militar ante mucha corrupción", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) 
+
+ggsave(filename = "salidas/barras_golpe.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  filter(wave == 2018) %>% 
+  drop_na(cierre_congreso) %>%
+  group_by(country_f, wave, cierre_congreso) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=porcentaje, 
+             fill= as.factor(cierre_congreso))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No justifica', 'Justifica'))+
+  labs(title = "Justificación de cierre de congreso en momentos difíciles del país", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) 
+
+ggsave(filename = "salidas/barras_cierre_congreso.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  filter(wave == 2018) %>% 
+  drop_na(cierre_corte) %>%
+  group_by(country_f, wave, cierre_corte) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=porcentaje, 
+             fill= as.factor(cierre_corte))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de disolución de corte suprema de justicia en 
+       momentos difíciles", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) 
+
+ggsave(filename = "salidas/barras_cierre_corte.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  filter(wave == 2018) %>% 
+  drop_na(simpatiza_partido) %>%
+  group_by(country_f, wave, simpatiza_partido) %>% 
+  tally() %>%
+  group_by(country_f, wave) %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=fct_relevel(country_f, "Total", after = Inf), y=porcentaje, 
+             fill= as.factor(simpatiza_partido))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Simpatiza', 'No simpatiza'))+
+  labs(title = "Simpatía con algún partido político", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) 
+
+ggsave(filename = "salidas/barras_simpatia.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
 ```
 
 
@@ -697,6 +905,7 @@ lapop2004_2018 %>%
 ggsave(filename = "salidas/informalidad.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
 
+
 ```
 
 
@@ -746,6 +955,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/medias_democracia_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, democracia7) %>% 
+  group_by(categoria_ocup_f, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+  
   
 ```
 
@@ -797,14 +1018,102 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/medias_desigualdad_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, reduc_desigualdad) %>% 
+  group_by(categoria_ocup_f, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+
+```{r Cruce variable laboral y voto pasado, echo=FALSE, warning=FALSE, message=FALSE}
+
+lapop2004_2018 %>%
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_pasado, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f) %>% 
+  summarise(media = mean(voto_pasado)*100) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Voto en elecciones pasadas según categoría laboral por país (media)", 
+       caption = "Elaboración propia en base a LAPOP 2008-2018",
+       y = "Porcentaje") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/porcentaje_votopasado_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, voto_pasado) %>% 
+  group_by(categoria_ocup_f, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
   
 ```
 
 
+```{r Cruce variable laboral y voto presente, echo=FALSE, warning=FALSE, message=FALSE}
+
+lapop2004_2018 %>%
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_presente, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f) %>% 
+  summarise(media = mean(voto_presente)*100) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=media, group=1)) +
+  geom_line(size = 0.5) +
+  geom_point(aes(y=media), size = 2) +
+  labs(title = "Voto en elecciones presentes según categoría laboral por país (media)", 
+       caption = "Elaboración propia en base a LAPOP 2008-2018",
+       y = "Porcentaje") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/porcentaje_votopresente_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, voto_presente) %>% 
+  group_by(categoria_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+  
+```
+
 # Cruces variable laboral / informal y variables objetivo 2018  
 
 
-```{r Cruce variable laboral y variables objetivo 2018, echo=FALSE, warning=FALSE, message=FALSE}
+```{r Cruce variables laborales y desempleados, echo=FALSE, warning=FALSE, message=FALSE}
 
 #Desempleados
 
@@ -834,6 +1143,18 @@ ggsave(filename = "salidas/desempleados_categoria.png", dpi = 300, type = "cairo
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, desempleados) %>% 
+  group_by(categoria_ocup_f, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
   bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
   drop_na(desempleados, formal_estado) %>% 
   group_by(country_f, formal_estado) %>% 
@@ -855,6 +1176,19 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/desempleados_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, desempleados) %>% 
+  group_by(formal_estado, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -880,6 +1214,21 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/desempleados_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, desempleados) %>% 
+  group_by(estatus_ocup_f, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y ayuda pobres, echo=FALSE, warning=FALSE, message=FALSE}
 
 #ayuda pobres
 
@@ -909,6 +1258,18 @@ ggsave(filename = "salidas/ayuda_pobres_categoria.png", dpi = 300, type = "cairo
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, ayuda_pobres) %>% 
+  group_by(categoria_ocup_f, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
   bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
   drop_na(ayuda_pobres, formal_estado) %>% 
   group_by(country_f, formal_estado) %>% 
@@ -930,6 +1291,19 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/ayuda_pobres_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, ayuda_pobres) %>% 
+  group_by(formal_estado, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
 
 lapop2004_2018 %>% 
@@ -957,6 +1331,21 @@ lapop2004_2018 %>%
 ggsave(filename = "salidas/ayuda_pobres_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, ayuda_pobres) %>% 
+  group_by(estatus_ocup_f, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y impuesto ricos, echo=FALSE, warning=FALSE, message=FALSE}
 
 #impuestos ricos
 
@@ -984,6 +1373,17 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/impuestos_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, impuestos_ricos) %>% 
+  group_by(categoria_ocup_f, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1008,6 +1408,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/impuestos_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, impuestos_ricos) %>% 
+  group_by(formal_estado, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
 
 lapop2004_2018 %>% 
@@ -1034,7 +1446,21 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/impuestos_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, impuestos_ricos) %>% 
+  group_by(estatus_ocup_f, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
+```
+
+```{r Cruce variables laborales y reducción desigualdad, echo=FALSE, warning=FALSE, message=FALSE}
 
 #Reducción desigualdad
 
@@ -1063,6 +1489,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/desigualdad_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, reduc_desigualdad) %>% 
+  group_by(formal_estado, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1089,8 +1527,21 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/desigualdad_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, reduc_desigualdad) %>% 
+  group_by(estatus_ocup_f, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
+```
 
+```{r Cruce variables laborales y democracia, echo=FALSE, warning=FALSE, message=FALSE}
 
 #Democracia
 lapop2004_2018 %>% 
@@ -1116,6 +1567,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/democracia_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, democracia7) %>% 
+  group_by(formal_estado, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
 
 lapop2004_2018 %>% 
   bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
@@ -1140,7 +1603,803 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/democracia_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, democracia7) %>% 
+  group_by(estatus_ocup_f, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
+```
+
+```{r Cruce variables laborales y voto pasado, echo=FALSE, warning=FALSE, message=FALSE}
+#Voto pasado
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_pasado, formal_estado) %>% 
+  group_by(country_f, formal_estado, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(voto_pasado))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones presentes por formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/voto_pasado_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, voto_pasado) %>% 
+  group_by(formal_estado, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_pasado, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(voto_pasado))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones presentes por estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/voto_pasado_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, voto_pasado) %>% 
+  group_by(estatus_ocup_f, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y voto presente, echo=FALSE, warning=FALSE, message=FALSE}
+#Voto presente
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_presente, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(voto_presente))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones presentes por categoría laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/voto_presente_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, voto_presente) %>% 
+  group_by(categoria_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_presente, formal_estado) %>% 
+  group_by(country_f, formal_estado, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(voto_presente))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones pasadas por formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/voto_presente_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, voto_presente) %>% 
+  group_by(formal_estado, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(voto_presente, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(voto_presente))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No', 'Si'))+
+  labs(title = "Voto en elecciones pasadas por estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018",
+       fill = "Voto") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/voto_presente_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, voto_presente) %>% 
+  group_by(estatus_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y corrupción, echo=FALSE, warning=FALSE, message=FALSE}
+#Corrupción
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(corrup_func, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(corrup_func))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Generalizado', 'No generalizado'))+
+  labs(title = "Nivel de corrupción de los funcionarios públicos por categoría laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/corrupcion_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, corrup_func) %>% 
+  group_by(categoria_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(corrup_func, formal_estado) %>% 
+  group_by(country_f, formal_estado, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(corrup_func))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Generalizado', 'No generalizado'))+
+  labs(title = "Nivel de corrupción de los funcionarios públicos por formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/corrupcion_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, corrup_func) %>% 
+  group_by(formal_estado, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "corrup_func", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(corrup_func, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(corrup_func))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Generalizado', 'No generalizado'))+
+  labs(title = "Nivel de corrupción de los funcionarios públicos por estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/corrup_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, corrup_func) %>% 
+  group_by(estatus_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+
+```{r Cruce variables laborales y golpe, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Golpe
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(golpe, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(golpe))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de golpe militar ante mucha corrupción según categoría laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/golpe_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, golpe) %>% 
+  group_by(categoria_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(golpe, formal_estado) %>% 
+  group_by(country_f, formal_estado, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(golpe))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de golpe militar ante mucha corrupción según formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/golpe_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, golpe) %>% 
+  group_by(formal_estado, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "golpe", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(golpe, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(golpe))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de golpe militar ante mucha corrupción según estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/golpe_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, golpe) %>% 
+  group_by(estatus_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+
+```{r Cruce variables laborales y cierre congreso, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Cierre congreso
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_congreso, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(cierre_congreso))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No justifica', 'Justifica'))+
+  labs(title = "Justificación de cierre de congreso en situaciones difíciles del país según categoría laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_congreso_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, cierre_congreso) %>% 
+  group_by(categoria_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_congreso, formal_estado) %>% 
+  group_by(country_f, formal_estado, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(cierre_congreso))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de cierre de congreso en situaciones difíciles del país según formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_congreso_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, cierre_congreso) %>% 
+  group_by(formal_estado, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "cierre_congreso", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_congreso, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(cierre_congreso))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de cierre del congreso en situaciones difíciles del país según estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_congreso_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, cierre_congreso) %>% 
+  group_by(estatus_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y cierre corte, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Cierre corte
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_corte, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(cierre_corte))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de cierre de corte suprema en situaciones difíciles del país según categoría laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_corte_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, cierre_corte) %>% 
+  group_by(categoria_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_corte, formal_estado) %>% 
+  group_by(country_f, formal_estado, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(cierre_corte))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de cierre de corte suprema en situaciones difíciles del país según formalidad", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_corte_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, cierre_corte) %>% 
+  group_by(formal_estado, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "cierre_corte", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(cierre_corte, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(cierre_corte))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('Justifica', 'No justifica'))+
+  labs(title = "Justificación de cierre de corte suprema en situaciones difíciles del país según estatus laboral", 
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/cierre_corte_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, cierre_corte) %>% 
+  group_by(estatus_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+```
+
+```{r Cruce variables laborales y simpatía política, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Simpatía política
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(simpatiza_partido, categoria_ocup_f) %>% 
+  group_by(country_f, categoria_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=categoria_ocup_f, y=porcentaje, fill= as.factor(simpatiza_partido))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No simpatiza', 'Simpatiza'))+
+  labs(title = "Simpatía con partido político según categoría laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/simpatiza_partido_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, simpatiza_partido) %>% 
+  group_by(categoria_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(simpatiza_partido, formal_estado) %>% 
+  group_by(country_f, formal_estado, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=formal_estado, y=porcentaje, fill= as.factor(simpatiza_partido))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No simpatiza', 'Simpatiza'))+
+  labs(title = "Simpatía con partido político según formalidad",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/simpatiza_partido_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, simpatiza_partido) %>% 
+  group_by(formal_estado, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "simpatiza_partido", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
+
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
+  drop_na(simpatiza_partido, estatus_ocup_f) %>% 
+  group_by(country_f, estatus_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  ggplot(aes(x=estatus_ocup_f, y=porcentaje, fill= as.factor(simpatiza_partido))) +
+  geom_col() +
+  scale_fill_discrete(labels=c('No simpatiza', 'Simpatiza'))+
+  labs(title = "Simpatía con partido político según estatus laboral",  
+       caption = "Elaboración propia en base a LAPOP 2018") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 7),
+        legend.title = element_blank()) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_y_continuous(labels= scales::percent_format(accuracy = 1L), 
+                     breaks=seq(0, 1, 0.2)) +
+  facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
+
+ggsave(filename = "salidas/simpatiza_partido_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, simpatiza_partido) %>% 
+  group_by(estatus_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  kbl() %>%
+  kable_styling()
 
 ```
 
@@ -1158,11 +2417,27 @@ democracia_null <- lmer(democracia7 ~ 1 + (1 | pais_anio), data = base_ml)
 
 reduc_desigualdad_null <- lmer(reduc_desigualdad ~ 1 + (1 | pais_anio), data = base_ml)
 
+voto_pasado_null <- glmer(voto_pasado ~ 1 + (1 | pais_anio), data = base_ml,
+                         family=binomial(link="logit"),
+                          control = glmerControl(optimizer = "bobyqa", 
+                                                optCtrl = list(maxfun=2e5)))
+
+voto_presente_null <- glmer(voto_presente ~ 1 + (1 | pais_anio), data = base_ml,
+                           family=binomial(link="logit"),
+                          control = glmerControl(optimizer = "bobyqa", 
+                                                optCtrl = list(maxfun=2e5)))
+
+ideologia_null <- lmer(ideologia ~ 1 + (1 | pais_anio), data = base_ml)
+
 ```
 
-El **ICC** para la variable objetivo de _acuerdo con la democracia_ es de **`r round(ICC(democracia_null), digits = 3)`**.  
+El **ICC** para la variable objetivo de _acuerdo con la democracia_ es de **`r round(icc(democracia_null), digits = 3)`**.  
 
-El **ICC** para la variable objetivo de _reducción de la desigualdad_ es de **`r round(ICC(reduc_desigualdad_null), digits = 3)`**.
+El **ICC** para la variable objetivo de _reducción de la desigualdad_ es de **`r round(icc(reduc_desigualdad_null), digits = 3)`**.
+
+El **ICC** para la variable objetivo de _voto pasado_ es de **`r round(icc(voto_pasado_null), digits = 3)`**.
+
+El **ICC** para la variable objetivo de _voto presente_ es de **`r round(icc(voto_presente_null), digits = 3)`**.
 
 
 ```{r Centrado de variables, echo=FALSE, warning=FALSE, message=FALSE}
@@ -1198,80 +2473,81 @@ base_ml <- base_ml %>%
 
 ```
 
+## Multinivel democracia
+
 
 ```{r Multinivel democracia, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 
 democracia_ind <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + (1 | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_ind_grup <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_ind_grup_int <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
                            (1 | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_random_apub <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pub_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_random_apri <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pri_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_random_cuent <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + cuenta_prop_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 democracia_random_desoc <- lmer(democracia7 ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
-                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + desocupado_cwc | pais_anio), 
-                         data = base_ml)
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + desocupado_cwc | pais_anio), 
+                         data = base_ml,
+                       REML = F)
 
-htmlreg(list(democracia_ind, democracia_ind_grup, democracia_ind_grup_int,
-             democracia_random_apub, democracia_random_apri, democracia_random_cuent,
-             democracia_random_desoc),
-        custom.model.names = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
-                               "Random_apri", "Random_cuent", "Random_desoc"),
-        custom.coef.names = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
-                              "Cuenta propia", "Desocupado", "Ideología (der-izq)",
+tab_model(democracia_ind, democracia_ind_grup, democracia_ind_grup_int,
+          democracia_random_apub, democracia_random_apri, democracia_random_cuent,
+          democracia_random_desoc,
+             p.style = "stars",
+             show.ci = F,
+             show.icc = FALSE,
+             show.aic = T,
+             dv.labels = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
+                           "Random_apri", "Random_cuent",
+                           "Random_desoc"),
+             pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia",
+                              "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
-        caption = "Democracia",
-        caption.above = T,
-        type = "html", doctype = T, file = "salidas/multilevel1.doc")
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
 
-htmlreg(list(democracia_ind, democracia_ind_grup, democracia_ind_grup_int,
-             democracia_random_apub, democracia_random_apri, democracia_random_cuent,
-             democracia_random_desoc),
-        custom.model.names = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
-                               "Random_apri", "Random_cuent", "Random_desoc"),
-        custom.coef.names = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
-                              "Cuenta propia", "Desocupado", "Ideología (der-izq)",
-                              "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
-        caption = "Democracia",
-        caption.above = T,
-        type = "html", doctype = F)
 ```
 
 
-```{r ajustes 1, warning=FALSE, message=FALSE, echo=FALSE}
+```{r ajustes democracia, warning=FALSE, message=FALSE, echo=FALSE}
 anova(democracia_null, democracia_ind)
 anova(democracia_ind, democracia_ind_grup)
 anova(democracia_ind_grup, democracia_ind_grup_int)
@@ -1334,64 +2610,101 @@ El pseudo r2 para el segundo nivel (países años)
 * en el modelo con interacciones es de **`r R2_grup_m3`**,
 * en el los modelos de pendiente aleatoria es de **`r R2_grup_m4`**.
 
+```{r gráficos democracia multinivel, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(democracia_ind_grup_int, ci_level = 0.95,
+                       omit.coefs = "(Intercept)",
+                       coefs = c("Patrón (ref: inactivos)" = "patron_cwc", 
+                                 "Asalariado pub." = "asal_pub_cwc", 
+                                 "Asalariado priv." = "asal_pri_cwc",
+                                 "Cuenta propia" = "cuenta_prop_cwc",
+                                 "Desocupado" = "desocupado_cwc", 
+                                 "Ideología (der-izq)" = "ideologia_cwc",
+                                 "Varón (ref: Mujer)" = "sexo_cwc", 
+                                 "Edad" = "edad_cwc", 
+                                 "Años educ." = "educ_cwc", 
+                                 "Nivel de desempleo" = "desempleo_cgm", 
+                                 "Nivel de Informalidad" = "informalidad_cgm",
+                                 "Nivel de Empleo pub." = "empleo_pub_cgm", 
+                                 "Brecha remuneraciones" = "brecha_remun_cgm",
+                                 "Desocupado*desempleo" = "desocupado_cwc:desempleo_cgm"))
 
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre la percepción de la democracia como \nmejor forma de gobierno",
+       subtitle = "Países seleccionados 2008-2018. Regresión lineal multinivel",
+         caption = "Fuente: elaboración propia en base a LAPOP 2008-2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "bottom",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA)) +
+  scale_x_continuous(breaks = seq(-0.2, 0.1, by = .02))
+
+
+```
+
+
+## Multinivel reducción desigualdad
 
 ```{r Multinivel reducción desigualdad, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
 
 reduc_desigualdad_ind <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
-                         edad_cwc + educ_cwc + (1 | pais_anio), data = base_ml)
+                         edad_cwc + educ_cwc + (1 | pais_anio), data = base_ml,
+                       REML = F)
 
 reduc_desigualdad_ind_grup <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc +
                                      asal_pri_cwc + cuenta_prop_cwc + desocupado_cwc +
                                      ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 reduc_desigualdad_random_apub <- lmer(reduc_desigualdad  ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 + asal_pub_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 reduc_desigualdad_random_apri <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 + asal_pri_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
 reduc_desigualdad_random_cuent <- lmer(reduc_desigualdad ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
                          cuenta_prop_cwc + desocupado_cwc + ideologia_cwc + sexo_cwc +
                          edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
                          empleo_pub_cgm + brecha_remun_cgm + (1 + cuenta_prop_cwc | pais_anio), 
-                         data = base_ml)
+                         data = base_ml,
+                       REML = F)
 
-htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup),
-        custom.model.names = c("Ind","Ind+grup"),
-        custom.coef.names = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
-                              "Cuenta propia", "Desocupado", "Ideología (der-izq)",
+tab_model(reduc_desigualdad_ind, reduc_desigualdad_ind_grup,
+             reduc_desigualdad_random_apub, reduc_desigualdad_random_apri,
+             reduc_desigualdad_random_cuent,
+             p.style = "stars",
+             show.ci = F,
+             show.icc = FALSE,
+             show.aic = T,
+             dv.labels = c("Ind", "Ind + grup", "Random_apub",
+                           "Random_apri", "Random_cuent"),
+             pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia",
+                              "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun."),
-        caption = "Reducción de la desigualdad",
-        caption.above = T,
-        type = "html", doctype = T, file = "salidas/multilevel2.doc")
-
-htmlreg(list(reduc_desigualdad_ind, reduc_desigualdad_ind_grup),
-        custom.model.names = c("Ind","Ind+grup"),
-        custom.coef.names = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
-                              "Cuenta propia", "Desocupado", "Ideología (der-izq)",
-                              "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun."),
-        caption = "Reducción de la desigualdad",
-        caption.above = T,
-        type = "html", doctype = F)
-
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
 
 ```
 
 
-```{r ajustes 2, warning=FALSE, message=FALSE, echo=FALSE}
+```{r ajustes desigualdad, warning=FALSE, message=FALSE, echo=FALSE}
 anova(reduc_desigualdad_null, reduc_desigualdad_ind)
 anova(reduc_desigualdad_ind, reduc_desigualdad_ind_grup)
 
@@ -1399,6 +2712,393 @@ anova(reduc_desigualdad_ind, reduc_desigualdad_ind_grup)
 
 **Importante**  
 Para la variable objetivo *reducción de la desigualdad* la prueba de devianza muestra que el modelo con variables contextuales agregadas no mejora el ajuste por sobre el modelo de variables individuales.  
+
+```{r gráficos reducción pobreza multinivel, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(reduc_desigualdad_ind, ci_level = 0.95,
+                       omit.coefs = "(Intercept)",
+                       coefs = c("Patrón (ref: inactivos)" = "patron_cwc", 
+                                 "Asalariado pub." = "asal_pub_cwc", 
+                                 "Asalariado priv." = "asal_pri_cwc",
+                                 "Cuenta propia" = "cuenta_prop_cwc",
+                                 "Desocupado" = "desocupado_cwc", 
+                                 "Ideología (der-izq)" = "ideologia_cwc",
+                                 "Varón (ref: Mujer)" = "sexo_cwc", 
+                                 "Edad" = "edad_cwc", 
+                                 "Años educ." = "educ_cwc", 
+                                 "Nivel de desempleo" = "desempleo_cgm", 
+                                 "Nivel de Informalidad" = "informalidad_cgm",
+                                 "Nivel de Empleo pub." = "empleo_pub_cgm", 
+                                 "Brecha remuneraciones" = "brecha_remun_cgm",
+                                 "Desocupado*desempleo" = "desocupado_cwc:desempleo_cgm"))
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre el grado de acuerdo en la implementación de \npolíticas firmes para reducir la desigualdad de ingresos entre ricos y pobres",
+       subtitle = "Países seleccionados 2008-2018. Regresión lineal multinivel",
+         caption = "Fuente: elaboración propia en base a LAPOP 2008-2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "bottom",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA)) +
+  scale_x_continuous(breaks = seq(-0.2, 0.2, by = .02))
+
+
+```
+
+
+## Multinivel voto pasado
+
+```{r Multinivel voto pasado, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+
+voto_pasado_ind <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                         desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_pasado_ind_grup <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + desocupado_cwc +
+                        ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_pasado_ind_grup_int <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_pasado_random_apub <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + asal_pub_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_pasado_random_apri <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + asal_pri_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_pasado_random_cuent <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + 
+                                        asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + cuenta_prop_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+
+voto_pasado_random_desoc <- glmer(voto_pasado ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + desocupado_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+
+tab_model(voto_pasado_ind, voto_pasado_ind_grup, voto_pasado_ind_grup_int,
+             voto_pasado_random_apub, voto_pasado_random_apri,
+             voto_pasado_random_cuent,
+             p.style = "stars",
+             show.ci = F,
+             show.icc = FALSE,
+             show.aic = T,
+             dv.labels = c("Ind", "Ind + grup", "voto_pasado_ind_grup_int", "Random_apub",
+                           "Random_apri", "Random_cuent"),
+             pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia",
+                              "Desocupado", "Ideología (der-izq)",
+                              "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+
+```
+
+```{r ajustes voto pasado, warning=FALSE, message=FALSE, echo=FALSE}
+anova(voto_pasado_null, voto_pasado_ind)
+anova(voto_pasado_ind, voto_pasado_ind_grup)
+anova(voto_pasado_ind_grup, voto_pasado_ind_grup_int)
+anova(voto_pasado_ind_grup_int, voto_pasado_random_apub)
+anova(voto_pasado_ind_grup_int, voto_pasado_random_apri)
+anova(voto_pasado_ind_grup_int, voto_pasado_random_cuent)
+anova(voto_pasado_ind_grup_int, voto_pasado_random_desoc)
+
+```
+
+```{r gráficos voto pasado multinivel, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(voto_pasado_ind_grup, ci_level = 0.95, exp = T,
+                       omit.coefs = "(Intercept)",
+                       coefs = c("Patrón (ref: inactivos)" = "patron_cwc", 
+                                 "Asalariado pub." = "asal_pub_cwc", 
+                                 "Asalariado priv." = "asal_pri_cwc",
+                                 "Cuenta propia" = "cuenta_prop_cwc",
+                                 "Desocupado" = "desocupado_cwc", 
+                                 "Ideología (der-izq)" = "ideologia_cwc",
+                                 "Varón (ref: Mujer)" = "sexo_cwc", 
+                                 "Edad" = "edad_cwc", 
+                                 "Años educ." = "educ_cwc", 
+                                 "Nivel de desempleo" = "desempleo_cgm", 
+                                 "Nivel de Informalidad" = "informalidad_cgm",
+                                 "Nivel de Empleo pub." = "empleo_pub_cgm", 
+                                 "Brecha remuneraciones" = "brecha_remun_cgm",
+                                 "Desocupado*desempleo" = "desocupado_cwc:desempleo_cgm"))
+
+reg_coef +
+  theme_light() +
+  labs(title = "Oportunidades relativas de haber votado en elecciones pasadas",
+       subtitle = "Países seleccionados 2008-2018. Regresión logística multinivel. \nCoeficientes exponenciados",
+         caption = "Fuente: elaboración propia en base a LAPOP 2008-2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "bottom",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+```
+
+## Multinivel voto presente
+
+```{r Multinivel voto presente, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+
+voto_presente_ind <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                         desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_presente_ind_grup <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + desocupado_cwc +
+                        ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_presente_ind_grup_int <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_presente_random_apub <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + asal_pub_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_presente_random_apri <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + asal_pri_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+voto_presente_random_cuent <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + 
+                                        asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + cuenta_prop_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+
+voto_presente_random_desoc <- glmer(voto_presente ~ patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                          cuenta_prop_cwc + 
+                           desocupado_cwc + ideologia_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + desocupado_cwc | pais_anio), 
+                         data = base_ml,
+                         family=binomial(link="logit"))
+
+
+tab_model(voto_presente_ind, voto_presente_ind_grup, voto_presente_ind_grup_int,
+             voto_presente_random_apub, voto_presente_random_apri,
+             voto_presente_random_cuent,
+             p.style = "stars",
+             show.ci = F,
+             show.icc = FALSE,
+             show.aic = T,
+             dv.labels = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
+                           "Random_apri", "Random_cuent"),
+             pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia",
+                              "Desocupado", "Ideología (der-izq)",
+                              "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+
+```
+
+```{r ajustes voto presente, warning=FALSE, message=FALSE, echo=FALSE}
+anova(voto_presente_null, voto_presente_ind)
+anova(voto_presente_ind, voto_presente_ind_grup)
+anova(voto_presente_ind_grup, voto_presente_ind_grup_int)
+anova(voto_presente_ind_grup_int, voto_presente_random_apub)
+anova(voto_presente_ind_grup_int, voto_presente_random_apri)
+anova(voto_presente_ind_grup_int, voto_presente_random_cuent)
+anova(voto_presente_ind_grup_int, voto_presente_random_desoc)
+
+```
+
+
+
+```{r gráficos voto presente multinivel, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(voto_presente_ind_grup_int, ci_level = 0.95, exp = T,
+                       omit.coefs = "(Intercept)",
+                       coefs = c("Patrón (ref: inactivos)" = "patron_cwc", 
+                                 "Asalariado pub." = "asal_pub_cwc", 
+                                 "Asalariado priv." = "asal_pri_cwc",
+                                 "Cuenta propia" = "cuenta_prop_cwc",
+                                 "Desocupado" = "desocupado_cwc", 
+                                 "Ideología (der-izq)" = "ideologia_cwc",
+                                 "Varón (ref: Mujer)" = "sexo_cwc", 
+                                 "Edad" = "edad_cwc", 
+                                 "Años educ." = "educ_cwc", 
+                                 "Nivel de desempleo" = "desempleo_cgm", 
+                                 "Nivel de Informalidad" = "informalidad_cgm",
+                                 "Nivel de Empleo pub." = "empleo_pub_cgm", 
+                                 "Brecha remuneraciones" = "brecha_remun_cgm",
+                                 "Desocupado*desempleo" = "desocupado_cwc:desempleo_cgm"))
+
+reg_coef +
+  theme_light() +
+  labs(title = "Oportunidades relativas de votar en el presente",
+       subtitle = "Países seleccionados 2008-2018. Regresión logística multinivel. \nCoeficientes exponenciados",
+         caption = "Fuente: elaboración propia en base a LAPOP 2008-2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "bottom",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+```
+
+## Multinivel ideología
+
+```{r Multinivel ideologia, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+
+ideologia_ind <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + (1 | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_ind_grup <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + (1 | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_ind_grup_int <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_random_apub <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pub_cwc | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_random_apri <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + asal_pri_cwc | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_random_cuent <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + (1 + cuenta_prop_cwc | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+ideologia_random_desoc <- lmer(ideologia ~ 1 + patron_cwc + asal_pub_cwc + asal_pri_cwc + 
+                         cuenta_prop_cwc + desocupado_cwc + sexo_cwc +
+                         edad_cwc + educ_cwc + desempleo_cgm + informalidad_cgm +
+                         empleo_pub_cgm + brecha_remun_cgm + desocupado_cwc*desempleo_cgm + 
+                           (1 + desocupado_cwc | pais_anio), 
+                         data = base_ml,
+                       REML = F)
+
+tab_model(ideologia_ind, ideologia_ind_grup, ideologia_ind_grup_int,
+          ideologia_random_apub, ideologia_random_apri, ideologia_random_cuent,
+          ideologia_random_desoc,
+             p.style = "stars",
+             show.ci = F,
+             show.icc = FALSE,
+             show.aic = T,
+             dv.labels = c("Ind", "Ind + grup", "Ind + grup + int", "Random_apub",
+                           "Random_apri", "Random_cuent",
+                           "Random_desoc"),
+             pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                              "Cuenta propia",
+                              "Desocupado",
+                              "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+
+```
+
+
+```{r ajustes ideologia, warning=FALSE, message=FALSE, echo=FALSE}
+anova(ideologia_null, ideologia_ind)
+anova(ideologia_ind, ideologia_ind_grup)
+anova(ideologia_ind_grup, ideologia_ind_grup_int)
+anova(ideologia_ind_grup_int, ideologia_random_apub)
+anova(ideologia_ind_grup_int, ideologia_random_apri)
+anova(ideologia_ind_grup_int, ideologia_random_cuent)
+anova(ideologia_ind_grup_int, ideologia_random_desoc)
+
+```
+
 
 
 # Modelos de efectos fijos (2018) 
@@ -1414,6 +3114,7 @@ lapop2018$estatus_ocup_f <- relevel(lapop2018$estatus_ocup_f, ref = "No ocupados
 lapop2018$formal_estado2 <- relevel(lapop2018$formal_estado2, ref = "No ocupados")
 lapop2018$formal_estado <- relevel(lapop2018$formal_estado, ref = "Inactivo")
 lapop2018$categoria_ocup_f <- relevel(lapop2018$categoria_ocup_f, ref = "Inactivo")
+lapop2018$sexo <- relevel(lapop2018$sexo, ref = "Mujer")
 
 democracia_fijo <- plm(democracia7 ~ categoria_ocup_f + formal_estado2 + estatus_ocup_f +
                          ideologia_imp + urbano + sexo + q2 + ed, 
@@ -1435,26 +3136,78 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ categoria_ocup_f + formal_estado2 
                           estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed, 
                        data=lapop2018, index=c("country_f"), model="within")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        custom.coef.names = c("Patrón", "Asalariado pub.", "Asalariado priv.",
-                              "Cuenta propia", "Desocupado", "Formal", "Informal",
-                              "Directivos-profesionales", "Téc-adm-vend", "Trab. Man. calif",
-                              "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
-                              "Varón", "Edad", "Años educ."),
-        caption = "Con variables laborales",
-        caption.above = T,
-        type = "html", doctype = T, file = "salidas/efectosfijos1.doc")
+tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+          impuestos_ricos_fijo,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres",
+                        "Impuestos ricos"),
+          pred.labels = c("Patrón", "Asalariado pub.", "Asalariado priv.",
+                          "Cuenta propia", "Desocupado", "Formal", "Informal",
+                          "Directivos-profesionales", "Téc-adm-vend", 
+                          "Trab. Man. calif",
+                          "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión lineal múltiple con control por países. 2018.")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        caption = "Con variables laborales",
-        caption.above = T,
-        type = "html", doctype = FALSE)
+# 
+# 
+# htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
+#         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+#         caption = "Con variables laborales",
+#         caption.above = T,
+#         type = "html", doctype = FALSE)
 
+corrupcion_pub <- glm(corrup_func ~ categoria_ocup_f + formal_estado2 +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+golpe <- glm(golpe ~ categoria_ocup_f + formal_estado2 +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_congreso <- glm(cierre_congreso ~ categoria_ocup_f + formal_estado2 +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_corte <- glm(cierre_corte ~ categoria_ocup_f + formal_estado2 +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+simpatiza_partido <- glm(simpatiza_partido ~ categoria_ocup_f + formal_estado2 +
+                          estatus_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Corrupción", "Golpe militar", "Cierre congreso", 
+                        "Cierre corte", "Simpatiza partido"),
+          pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                          "Cuenta propia", "Desocupado", "Formal", "Informal",
+                          "Directivos-profesionales", "Téc-adm-vend", 
+                          "Trab. Man. calif",
+                          "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión logística binaria con control por países. 2018.",
+          rm.terms = c("country_fBrasil",
+                       "country_fChile",
+                       "country_fColombia",
+                       "country_fMéxico",
+                       "country_fPerú",
+                       "country_fUruguay",
+                       "country_fArgentina"))
 
 ```
 
+En el caso de las regresiones logísticas la categoría 1 de la variable dependiente siempre es la opción *más progre*.
 
 ```{r vif, warning=FALSE, message=FALSE, echo=FALSE}
 democracia <- lm(democracia7 ~ categoria_ocup_f + formal_estado2 + estatus_ocup_f +
@@ -1465,13 +3218,200 @@ reduc_desigualdad <- lm(reduc_desigualdad ~ categoria_ocup_f + formal_estado2 + 
 
 car::vif(democracia)
 car::vif(reduc_desigualdad)
+car::vif(corrupcion_pub)
+car::vif(golpe)
+car::vif(cierre_congreso)
+```
+
+Para el caso de las regresiones logísticas no es recomendable utilizar las tres variables laborales ya que están altamente correlacionadas.
+
+
+
+## Utilizando solo categoría laboral
+
+```{r modelos efectos fijos 2, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
+
+democracia_fijo <- plm(democracia7 ~ categoria_ocup_f  +
+                         ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desigualdad_fijo <- plm(reduc_desigualdad ~ categoria_ocup_f + 
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+desempleados_fijo <- plm(desempleados ~ categoria_ocup_f + 
+                           ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+ayuda_pobres_fijo <- plm(ayuda_pobres ~ categoria_ocup_f + 
+                           ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+impuestos_ricos_fijo <- plm(impuestos_ricos ~ categoria_ocup_f 
+                            + ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018, index=c("country_f"), model="within")
+
+tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+          impuestos_ricos_fijo,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres",
+                        "Impuestos ricos"),
+          pred.labels = c("Patrón", "Asalariado pub.", "Asalariado priv.",
+                          "Cuenta propia", "Desocupado", "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión lineal múltiple con control por países. 2018.")
+
+
+corrupcion_pub <- glm(corrup_func ~ categoria_ocup_f + 
+                        ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+golpe <- glm(golpe ~ categoria_ocup_f + ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_congreso <- glm(cierre_congreso ~ categoria_ocup_f + 
+                         ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_corte <- glm(cierre_corte ~ categoria_ocup_f + 
+                      ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+simpatiza_partido <- glm(simpatiza_partido ~ categoria_ocup_f  + 
+                           ideologia_imp + urbano + sexo + q2 + ed +
+                        country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Corrupción", "Golpe militar", "Cierre congreso", 
+                        "Cierre corte", "Simpatiza partido"),
+          pred.labels = c("Intercepto", "Patrón", "Asalariado pub.", "Asalariado priv.",
+                          "Cuenta propia", "Desocupado", "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión logística binaria con control por países. 2018.",
+          rm.terms = c("country_fBrasil",
+                       "country_fChile",
+                       "country_fColombia",
+                       "country_fMéxico",
+                       "country_fPerú",
+                       "country_fUruguay",
+                       "country_fArgentina"))
 
 ```
+
+
+```{r prueba efectos fijos 2, warning=FALSE, message=FALSE, echo=FALSE}
+democracia <- lm(democracia7 ~ categoria_ocup_f +
+                         ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018)
+
+desigualdad <- lm(reduc_desigualdad ~ categoria_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018)
+
+desempleados <- lm(desempleados ~ categoria_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018)
+
+ayuda_pobres <- lm(ayuda_pobres ~ categoria_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018)
+
+impuestos_ricos <- lm(impuestos_ricos ~ categoria_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed, 
+                       data=lapop2018)
+
+pFtest(democracia_fijo, democracia)
+pFtest(desigualdad_fijo, desigualdad)
+pFtest(desempleados_fijo, desempleados)
+pFtest(ayuda_pobres_fijo, ayuda_pobres)
+pFtest(impuestos_ricos_fijo, impuestos_ricos)
+
+```
+```{r gráficos efectos fijos categoría laboral, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+                       impuestos_ricos_fijo, ci_level = 0.95,
+                       coefs = c("Patrón (Ref: inac)" = "categoria_ocup_fPatrón",
+                                 "Asalariado pub." = "categoria_ocup_fAsalariado Público",
+                                 "Asalariado priv." = "categoria_ocup_fAsalariado privado",
+                                 "Cuenta propia" = "categoria_ocup_fCuenta propia",
+                                 "Desocupados" = "categoria_ocup_fDesocupado",
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Democracia", "Desigualdad", "Desempleados", 
+                                       "Ayuda pobres", "Impuestos ricos"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones lineales múltiples. Efectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+                       ci_level = 0.95, exp = T,
+                       coefs = c("Patrón (Ref: inac)" = "categoria_ocup_fPatrón",
+                                 "Asalariado pub." = "categoria_ocup_fAsalariado Público",
+                                 "Asalariado priv." = "categoria_ocup_fAsalariado privado",
+                                 "Cuenta propia" = "categoria_ocup_fCuenta propia",
+                                 "Desocupados" = "categoria_ocup_fDesocupado",
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Corrupción", "Golpe militar", "Cierre congreso",
+                                       "Cierre corte", "Simpatiza partido"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones logísticas binarias. \nCoeficientes exponenciados. Efectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+```
+
+
 
 ## Utilizando solo formalidad  
 
 
-```{r modelos efectos fijos 2, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
+```{r modelos efectos fijos 3, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
 
 democracia_fijo <- plm(democracia7 ~ formal_estado +
                          ideologia_imp + urbano + sexo + q2 + ed, 
@@ -1493,25 +3433,67 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ formal_estado +
                           ideologia_imp + urbano + sexo + q2 + ed, 
                        data=lapop2018, index=c("country_f"), model="within")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        custom.coef.names = c("Formal", "Informal", "Desocupado", "Ideología (der-izq)", "Urbano",
-                              "Varón", "Edad", "Años educ."),
-        caption = "Sin variables laborales",
-        caption.above = T,
-        type = "html", doctype = T, file = "salidas/efectosfijos2.doc")
+tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+          impuestos_ricos_fijo,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres",
+                        "Impuestos ricos"),
+          pred.labels = c("Formal", "Informal", "Desocupado", 
+                          "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión lineal múltiple con control por países. 2018.")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        caption = "Con variables laborales",
-        caption.above = T,
-        type = "html", doctype = FALSE)
+# htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
+#         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+#         caption = "Con variables laborales",
+#         caption.above = T,
+#         type = "html", doctype = FALSE)
 
+
+corrupcion_pub <- glm(corrup_func ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+golpe <- glm(golpe ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_congreso <- glm(cierre_congreso ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_corte <- glm(cierre_corte ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+simpatiza_partido <- glm(simpatiza_partido ~ formal_estado +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f,
+                       data=lapop2018, family=binomial(link="logit"))
+
+tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Corrupción", "Golpe militar", "Cierre congreso", 
+                        "Cierre corte", "Simpatiza partido"),
+          pred.labels = c("Intercepto", "Formal", "Informal", "Desocupado",
+                          "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión logística binaria con control por países. 2018.",
+          rm.terms = c("country_fBrasil",
+                       "country_fChile",
+                       "country_fColombia",
+                       "country_fMéxico",
+                       "country_fPerú",
+                       "country_fUruguay",
+                       "country_fArgentina"))
 
 ```
 
 
-```{r prueba efectos fijos 1, warning=FALSE, message=FALSE, echo=FALSE}
+```{r prueba efectos fijos 3, warning=FALSE, message=FALSE, echo=FALSE}
 democracia <- lm(democracia7 ~ formal_estado +
                          ideologia_imp + urbano + sexo + q2 + ed, 
                        data=lapop2018)
@@ -1541,11 +3523,75 @@ pFtest(impuestos_ricos_fijo, impuestos_ricos)
 ```
 Para todos los modelos es significativo utilizar **efectos fijos**.  
 
+```{r gráficos efectos fijos formalidad , warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+                       impuestos_ricos_fijo, ci_level = 0.95,
+                       coefs = c("Formal (Ref: inactivo)" = "formal_estadoFormal",
+                                 "Informal" = "formal_estadoInformal",
+                                 "Desocupado" = "formal_estadoDesocupado",
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Democracia", "Desigualdad", "Desempleados", 
+                                       "Ayuda pobres", "Impuestos ricos"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones lineales múltiples. Efectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+                       ci_level = 0.95, exp = T,
+                       coefs = c("Formal (Ref: inactivo)" = "formal_estadoFormal",
+                                 "Informal" = "formal_estadoInformal",
+                                 "Desocupado" = "formal_estadoDesocupado",
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Corrupción", "Golpe militar", "Cierre congreso",
+                                       "Cierre corte", "Simpatiza partido"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones logísticas binarias. \nCoeficientes exponenciados. Efectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+```
 
 ## Utilizando estatus ocupacional  
 
 
-```{r modelos efectos fijos 3, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
+```{r modelos efectos fijos 4, warning=FALSE, message=FALSE, echo=FALSE, results='asis'}
 
 democracia_fijo <- plm(democracia7 ~ estatus_ocup_f +
                          ideologia_imp + urbano + sexo + q2 + ed, 
@@ -1567,24 +3613,70 @@ impuestos_ricos_fijo <- plm(impuestos_ricos ~ estatus_ocup_f +
                           ideologia_imp + urbano + sexo + q2 + ed, 
                        data=lapop2018, index=c("country_f"), model="within")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        custom.coef.names = c("Directivos-profesionales", "Téc-adm-vend", "Trab. Man. calif",
-                              "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
-                              "Varón", "Edad", "Años educ."),
-        caption = "Con variable de estatus",
-        caption.above = T,
-        type = "html", doctype = T, file = "salidas/efectosfijos3.doc")
+tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+          impuestos_ricos_fijo,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres",
+                        "Impuestos ricos"),
+          pred.labels = c("Directivos-profesionales", "Téc-adm-vend", 
+                          "Trab. Man. calif",
+                          "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión lineal múltiple con control por países. 2018.")
 
-htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
-        custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
-        caption = "Con variable de estatus",
-        caption.above = T,
-        type = "html", doctype = FALSE)
+
+# htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
+#         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
+#         caption = "Con variable de estatus",
+#         caption.above = T,
+#         type = "html", doctype = FALSE)
+
+corrupcion_pub <- glm(corrup_func ~ estatus_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+golpe <- glm(golpe ~ estatus_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_congreso <- glm(cierre_congreso ~ estatus_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+cierre_corte <- glm(cierre_corte ~ estatus_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f, 
+                       data=lapop2018, family=binomial(link="logit"))
+
+simpatiza_partido <- glm(simpatiza_partido ~ estatus_ocup_f +
+                          ideologia_imp + urbano + sexo + q2 + ed + country_f,
+                       data=lapop2018, family=binomial(link="logit"))
+
+tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+          p.style = "stars",
+          show.ci = F,
+          show.aic = T,
+          dv.labels = c("Corrupción", "Golpe militar", "Cierre congreso", 
+                        "Cierre corte", "Simpatiza partido"),
+          pred.labels = c("Intercepto", "Directivos-profesionales", "Téc-adm-vend", 
+                          "Trab. Man. calif",
+                          "Trab. Man. No calif",
+                          "Ideología (der-izq)", "Urbano",
+                          "Varón", "Edad", "Años educ."),
+          title = "Regresión logística binaria con control por países. 2018.",
+          rm.terms = c("country_fBrasil",
+                       "country_fChile",
+                       "country_fColombia",
+                       "country_fMéxico",
+                       "country_fPerú",
+                       "country_fUruguay",
+                       "country_fArgentina"))
+
 ```
 
 
-```{r prueba efectos fijos 3, warning=FALSE, message=FALSE, echo=FALSE}
+```{r prueba efectos fijos 4, warning=FALSE, message=FALSE, echo=FALSE}
 democracia <- lm(democracia7 ~ estatus_ocup_f +
                          ideologia_imp + urbano + sexo + q2 + ed, 
                        data=lapop2018)
@@ -1615,3 +3707,69 @@ pFtest(impuestos_ricos_fijo, impuestos_ricos)
 
 Para todos los modelos es significativo utilizar **efectos fijos**.  
 
+```{r gráficos efectos fijos estatus ocupacional, warning=FALSE, message=FALSE, echo=FALSE}
+reg_coef <- plot_summs(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo,
+                       impuestos_ricos_fijo, ci_level = 0.95,
+                       coefs = c("Directivos-profesionales (Ref: desocup-inac)" = "estatus_ocup_fDirectivos-Profesionales", 
+                                 "Téc-adm-vend" = "estatus_ocup_fTécnicos-administrativos-vendedores",
+                                 "Trab. Man. calif" = "estatus_ocup_fTrabajadores manuales calificados",
+                                 "Trab. Man. No calif" = "estatus_ocup_fTrabajadores manuales no calificados", 
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Democracia", "Desigualdad", "Desempleados", 
+                                       "Ayuda pobres", "Impuestos ricos"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones lineales múltiples. \nEfectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
+                       ci_level = 0.95, exp = T,
+                       coefs = c("Directivos-profesionales (Ref: desocup-inac)" = "estatus_ocup_fDirectivos-Profesionales", 
+                                 "Téc-adm-vend" = "estatus_ocup_fTécnicos-administrativos-vendedores",
+                                 "Trab. Man. calif" = "estatus_ocup_fTrabajadores manuales calificados",
+                                 "Trab. Man. No calif" = "estatus_ocup_fTrabajadores manuales no calificados", 
+                                 "Ideología (Der-Izq)" = "ideologia_imp",
+                                 "Urbano (Ref: rural)" = "urbano",
+                                 "Varón (Ref: Mujer)" = "sexoVarón",
+                                 "Edad" = "q2",
+                                 "Años educativos" = "ed"),
+                       model.names = c("Corrupción", "Golpe militar", "Cierre congreso",
+                                       "Cierre corte", "Simpatiza partido"),
+                       point.size = 2,
+                       legend.title = "Modelos")
+
+reg_coef +
+  theme_light() +
+  labs(title = "Efectos sobre variables dependiente",
+       subtitle = "Países seleccionados 2018. Regresiones logísticas binarias. \nCoeficientes exponenciados. Efectos fijos: países.",
+         caption = "Fuente: elaboración propia en base a LAPOP 2018") +
+  theme(axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        legend.position= "right",
+        panel.background = element_rect(fill = "transparent", colour = NA),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.background= element_rect(fill = "transparent", colour = NA))
+
+
+```
