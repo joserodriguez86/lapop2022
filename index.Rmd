@@ -17,7 +17,7 @@ if (!require("pacman")) install.packages("pacman")
 
 pacman::p_load(tidyverse, kableExtra, GDAtools, FactoMineR, VIM, janitor, gridExtra,
                janitor, readxl, gtsummary, lme4, texreg, reghelper, nlme, plm, performance,
-               sjPlot, jtools)
+               sjPlot, jtools, flextable)
 
 load("bases/lapop2004_2018.RData")
 
@@ -486,7 +486,52 @@ variables_seleccion %>%
                                   all_categorical() ~ "{n} ({p}%)"),
                  digits = list(all_categorical() ~ c(0, 1)),
   							 missing = "no") %>% 
-  add_overall(col_label = "**Total**", last = TRUE)
+  add_overall(col_label = "**Total**", last = TRUE) 
+
+tabla_resumen <- variables_seleccion %>%
+  tbl_summary(by = wave,
+              type = list(c(democracia7, reduc_desigualdad, 
+                          desempleados, ayuda_pobres,
+                          impuestos_ricos) ~ "continuous"),
+              label = c(democracia7 ~ "Acuerdo con democracia",
+                           reduc_desigualdad ~ "Acuerdo con políticas de 
+                           reducción de desigualdad", 
+                        voto_pasado ~ "Voto pasado",
+                        voto_presente ~ "Voto presente",
+                          desempleados ~ "Desempleo como fenómeno voluntario",
+                          ayuda_pobres ~ "Los gobiernos deben invertir en ayudar 
+                          a los pobres",
+                          impuestos_ricos ~ "Injusto que los ricos paguen altos
+                          impuestos",
+                        corrup_func ~ "Generalización corrupción",
+                        golpe ~ "Golpe militar por corrupción",
+                        cierre_congreso ~ "Aprobación de cierre del congreso",
+                        cierre_corte ~ "Aprobación de cierre de la corte",
+                        simpatiza_partido ~ "Simpatía por partido político",
+                          categoria_ocup_f ~ "Categoría ocupacional",
+                          formal_estado ~ "Formalidad",
+                          estatus_ocup_f ~ "Estatus ocupacional",
+                          ideologia_imp ~ "Ideología (der-izq)",
+                          sexo ~ "Sexo",
+                          q2 ~ "Edad",
+                          ed ~ "Años educativos",
+                          urbano ~ "Región",
+                          desempleo ~ "Nivel de desempleo",
+                          informalidad ~ "Nivel de informalidad",
+                          empleo_publico ~ "Nivel de empleo público",
+                          brecha_remun ~ "Brecha informales / asalariados reg.",
+                          country_f ~ "País"
+                          ),
+                 statistic = list(all_continuous() ~ "{mean} ({sd})", 
+                                  all_categorical() ~ "{n} ({p}%)"),
+                 digits = list(all_categorical() ~ c(0, 1)),
+  							 missing = "no") %>% 
+  add_overall(col_label = "**Total**", last = TRUE) %>% 
+  as_flex_table()
+
+flextable::save_as_docx(tabla_resumen, path = "salidas/tabla_resumen.docx")
+
+
 ```
 
 
@@ -966,6 +1011,17 @@ lapop2004_2018 %>%
   adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, democracia7) %>% 
+  group_by(categoria_ocup_f, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/democracia_catlaboral.docx")
   
   
 ```
@@ -1027,6 +1083,16 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/desigualdad_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, reduc_desigualdad) %>% 
+  group_by(categoria_ocup_f, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1066,8 +1132,19 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopasado_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, voto_pasado) %>% 
+  group_by(categoria_ocup_f, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
   
 ```
 
@@ -1105,8 +1182,19 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopresente_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  drop_na(categoria_ocup_f, voto_presente) %>% 
+  group_by(categoria_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
   
 ```
 
@@ -1140,6 +1228,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/desempleados_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, desempleados) %>% 
+  group_by(categoria_ocup_f, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/desempleados_catlaboral.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1186,6 +1286,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/desempleados_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, desempleados) %>% 
+  group_by(formal_estado, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1213,6 +1325,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/desempleados_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, desempleados) %>% 
+  group_by(estatus_ocup_f, desempleados) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/desempleo_estatus_ocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1265,6 +1389,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/ayudalaboral_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, ayuda_pobres) %>% 
+  group_by(categoria_ocup_f, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1292,6 +1428,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/ayuda_pobres_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, ayuda_pobres) %>% 
+  group_by(formal_estado, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/ayudapobres_formalidad.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1330,6 +1478,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/ayuda_pobres_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, ayuda_pobres) %>% 
+  group_by(estatus_ocup_f, ayuda_pobres) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/ayudapobres_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1382,6 +1542,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/impuestos_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, impuestos_ricos) %>% 
+  group_by(categoria_ocup_f, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1408,6 +1580,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/impuestos_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, impuestos_ricos) %>% 
+  group_by(formal_estado, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/impuestos_formalidad.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1445,6 +1629,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/impuestos_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, impuestos_ricos) %>% 
+  group_by(estatus_ocup_f, impuestos_ricos) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/impuestos_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1498,6 +1694,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/reducdesigualdad_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, reduc_desigualdad) %>% 
+  group_by(formal_estado, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1536,8 +1744,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/reducdesigualdad_estatusocup.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, reduc_desigualdad) %>% 
+  group_by(estatus_ocup_f, reduc_desigualdad) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
 
 ```
 
@@ -1576,9 +1796,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/democracia_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, democracia7) %>% 
+  group_by(formal_estado, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
-
 
 lapop2004_2018 %>% 
   bind_rows(lapop2004_2018 %>% mutate(country_f = "Total")) %>% 
@@ -1602,6 +1833,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/democracia_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, democracia7) %>% 
+  group_by(estatus_ocup_f, democracia7) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/democracia_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1653,6 +1896,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopasado_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, voto_pasado) %>% 
+  group_by(formal_estado, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1681,6 +1936,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/voto_pasado_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, voto_pasado) %>% 
+  group_by(estatus_ocup_f, voto_pasado) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopasado_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1732,6 +1999,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopresente_catocup.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, voto_presente) %>% 
+  group_by(categoria_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -1759,6 +2038,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/voto_presente_formal.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, voto_presente) %>% 
+  group_by(formal_estado, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "formal_estado", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopresente_formalidad.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1797,6 +2088,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/voto_presente_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, voto_presente) %>% 
+  group_by(estatus_ocup_f, voto_presente) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/votopresente_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1848,9 +2151,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/corrup_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, corrup_func) %>% 
+  group_by(categoria_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
-
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -1886,8 +2200,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "corrup_func", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/corrup_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, corrup_func) %>% 
+  group_by(formal_estado, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "corrup_func", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
 
 
 lapop2004_2018 %>% 
@@ -1924,8 +2250,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/corrup_estatusocup.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, corrup_func) %>% 
+  group_by(estatus_ocup_f, corrup_func) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
 
 ```
 
@@ -1957,6 +2295,18 @@ lapop2004_2018 %>%
 
 ggsave(filename = "salidas/golpe_categoria.png", dpi = 300, type = "cairo", width = 8, height = 6)
 
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, golpe) %>% 
+  group_by(categoria_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/golpe_catlaboral.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2005,6 +2355,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "golpe", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/golpe_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, golpe) %>% 
+  group_by(formal_estado, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "golpe", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -2033,6 +2395,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/golpe_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, golpe) %>% 
+  group_by(estatus_ocup_f, golpe) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/golpe_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2086,6 +2460,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecongreso_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, cierre_congreso) %>% 
+  group_by(categoria_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -2124,9 +2510,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "cierre_congreso", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecongreso_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, cierre_congreso) %>% 
+  group_by(formal_estado, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "cierre_congreso", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
-
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2152,6 +2549,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/cierre_congreso_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, cierre_congreso) %>% 
+  group_by(estatus_ocup_f, cierre_congreso) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecongreso_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2204,6 +2613,18 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecorte_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, cierre_corte) %>% 
+  group_by(categoria_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
 
@@ -2242,9 +2663,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "cierre_corte", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecorte_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, cierre_corte) %>% 
+  group_by(formal_estado, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "cierre_corte", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
   kable_styling()
-
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2270,6 +2702,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/cierre_corte_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, cierre_corte) %>% 
+  group_by(estatus_ocup_f, cierre_corte) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/cierrecorte_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2322,8 +2766,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/simpatiapolitica_catlaboral.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(categoria_ocup_f, simpatiza_partido) %>% 
+  group_by(categoria_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "categoria_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
 
 
 lapop2004_2018 %>% 
@@ -2360,8 +2816,20 @@ lapop2004_2018 %>%
   pivot_wider(!n, names_from = "simpatiza_partido", values_from = "porcentaje") %>% 
   adorn_totals() %>% 
   adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/simpatiapolitica_formalidad.docx")
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(formal_estado, simpatiza_partido) %>% 
+  group_by(formal_estado, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "simpatiza_partido", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
   kbl() %>%
-  kable_styling()
+  kable_styling() 
 
 
 lapop2004_2018 %>% 
@@ -2388,6 +2856,18 @@ lapop2004_2018 %>%
   facet_wrap(~fct_relevel(country_f, "Total", after = Inf), ncol = 3)
 
 ggsave(filename = "salidas/simpatiza_partido_estatus.png", dpi = 300, type = "cairo", width = 8, height = 6)
+
+lapop2004_2018 %>% 
+  filter(wave == 2018) %>% 
+  drop_na(estatus_ocup_f, simpatiza_partido) %>% 
+  group_by(estatus_ocup_f, simpatiza_partido) %>% 
+  tally() %>% 
+  mutate(porcentaje = n/sum(n)) %>% 
+  pivot_wider(!n, names_from = "estatus_ocup_f", values_from = "porcentaje") %>% 
+  adorn_totals() %>% 
+  adorn_pct_formatting() %>% 
+  flextable() %>% 
+  save_as_docx(path = "salidas/simpatiapolitica_estatusocup.docx")
 
 lapop2004_2018 %>% 
   filter(wave == 2018) %>% 
@@ -2542,7 +3022,8 @@ tab_model(democracia_ind, democracia_ind_grup, democracia_ind_grup_int,
                               "Cuenta propia",
                               "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
+          file = "salidas/multilevel_democracia.doc")
 
 ```
 
@@ -2644,6 +3125,8 @@ reg_coef +
         legend.background= element_rect(fill = "transparent", colour = NA)) +
   scale_x_continuous(breaks = seq(-0.2, 0.1, by = .02))
 
+ggsave(filename = "salidas/multilevel_democracia.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
+
 
 ```
 
@@ -2699,7 +3182,8 @@ tab_model(reduc_desigualdad_ind, reduc_desigualdad_ind_grup,
                               "Cuenta propia",
                               "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+                              "Empleo pub.", "Brecha remun."),
+          file = "salidas/reduccion_desigualdad_multilevel.doc")
 
 ```
 
@@ -2747,6 +3231,7 @@ reg_coef +
         legend.background= element_rect(fill = "transparent", colour = NA)) +
   scale_x_continuous(breaks = seq(-0.2, 0.2, by = .02))
 
+ggsave(filename = "salidas/multilevel_desigualdad.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 ```
 
@@ -2831,7 +3316,8 @@ tab_model(voto_pasado_ind, voto_pasado_ind_grup, voto_pasado_ind_grup_int,
                               "Cuenta propia",
                               "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
+          file = "salidas/multilevel_votopasado.doc")
 
 ```
 
@@ -2878,6 +3364,8 @@ reg_coef +
         plot.background = element_rect(fill = "transparent", colour = NA),
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
+
+ggsave(filename = "salidas/multilevel_votopasado.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 
 ```
@@ -2962,7 +3450,8 @@ tab_model(voto_presente_ind, voto_presente_ind_grup, voto_presente_ind_grup_int,
                               "Cuenta propia",
                               "Desocupado", "Ideología (der-izq)",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
+          file = "salidas/multilevel_votopasado.doc")
 
 ```
 
@@ -3012,6 +3501,7 @@ reg_coef +
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
 
+ggsave(filename = "salidas/multilevel_votopresente.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 ```
 
@@ -3083,7 +3573,8 @@ tab_model(ideologia_ind, ideologia_ind_grup, ideologia_ind_grup_int,
                               "Cuenta propia",
                               "Desocupado",
                               "Varón", "Edad", "Años educ.", "Desempleo", "Informalidad",
-                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"))
+                              "Empleo pub.", "Brecha remun.", "Desocupado*desempleo"),
+          file = "salidas/multilevel_ideologia.doc")
 
 ```
 
@@ -3149,7 +3640,8 @@ tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fij
                           "Trab. Man. calif",
                           "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
                           "Varón", "Edad", "Años educ."),
-          title = "Regresión lineal múltiple con control por países. 2018.")
+          title = "Regresión lineal múltiple con control por países. 2018.",
+          file = "salidas/efectosfijos_completo1.doc")
 
 # 
 # 
@@ -3203,7 +3695,8 @@ tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partid
                        "country_fMéxico",
                        "country_fPerú",
                        "country_fUruguay",
-                       "country_fArgentina"))
+                       "country_fArgentina"),
+          file = "salidas/efectosfijos_completo2.doc")
 
 ```
 
@@ -3261,7 +3754,8 @@ tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fij
           pred.labels = c("Patrón", "Asalariado pub.", "Asalariado priv.",
                           "Cuenta propia", "Desocupado", "Ideología (der-izq)", "Urbano",
                           "Varón", "Edad", "Años educ."),
-          title = "Regresión lineal múltiple con control por países. 2018.")
+          title = "Regresión lineal múltiple con control por países. 2018.",
+          file = "salidas/efectosfijos_catlaboral1.doc")
 
 
 corrupcion_pub <- glm(corrup_func ~ categoria_ocup_f + 
@@ -3304,7 +3798,8 @@ tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partid
                        "country_fMéxico",
                        "country_fPerú",
                        "country_fUruguay",
-                       "country_fArgentina"))
+                       "country_fArgentina"),
+          file = "salidas/efectosfijos_catlaboral2.doc")
 
 ```
 
@@ -3370,6 +3865,8 @@ reg_coef +
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
 
+ggsave(filename = "salidas/efectosfijos_laboral1.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
+
 
 reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
                        ci_level = 0.95, exp = T,
@@ -3402,6 +3899,8 @@ reg_coef +
         plot.background = element_rect(fill = "transparent", colour = NA),
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
+
+ggsave(filename = "salidas/efectosfijos_laboral2.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 
 ```
@@ -3443,7 +3942,8 @@ tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fij
           pred.labels = c("Formal", "Informal", "Desocupado", 
                           "Ideología (der-izq)", "Urbano",
                           "Varón", "Edad", "Años educ."),
-          title = "Regresión lineal múltiple con control por países. 2018.")
+          title = "Regresión lineal múltiple con control por países. 2018.",
+          file = "salidas/efectosfijos_formalidad1.doc")
 
 # htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
 #         custom.model.names = c("Democracia", "Desigualdad", "Desempleados", "Ayuda pobres", "Impuestos ricos"),
@@ -3488,7 +3988,8 @@ tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partid
                        "country_fMéxico",
                        "country_fPerú",
                        "country_fUruguay",
-                       "country_fArgentina"))
+                       "country_fArgentina"),
+          file = "salidas/efectosfijos_formalidad2.doc")
 
 ```
 
@@ -3554,6 +4055,8 @@ reg_coef +
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
 
+ggsave(filename = "salidas/efectosfijos_formalidad1.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
+
 
 reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
                        ci_level = 0.95, exp = T,
@@ -3584,6 +4087,8 @@ reg_coef +
         plot.background = element_rect(fill = "transparent", colour = NA),
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
+
+ggsave(filename = "salidas/efectosfijos_formalidad2.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 
 ```
@@ -3624,7 +4129,8 @@ tab_model(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fij
                           "Trab. Man. calif",
                           "Trab. Man. No calif", "Ideología (der-izq)", "Urbano",
                           "Varón", "Edad", "Años educ."),
-          title = "Regresión lineal múltiple con control por países. 2018.")
+          title = "Regresión lineal múltiple con control por países. 2018.",
+          file = "salidas/efectosfijos_estatus1.doc")
 
 
 # htmlreg(list(democracia_fijo, desigualdad_fijo, desempleados_fijo, ayuda_pobres_fijo, impuestos_ricos_fijo),
@@ -3671,7 +4177,8 @@ tab_model(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partid
                        "country_fMéxico",
                        "country_fPerú",
                        "country_fUruguay",
-                       "country_fArgentina"))
+                       "country_fArgentina"),
+          file = "salidas/efectosfijos_estatus2.doc")
 
 ```
 
@@ -3739,6 +4246,8 @@ reg_coef +
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
 
+ggsave(filename = "salidas/efectosfijos_estatusocup1.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
+
 
 reg_coef <- plot_summs(corrupcion_pub, golpe, cierre_congreso, cierre_corte, simpatiza_partido,
                        ci_level = 0.95, exp = T,
@@ -3770,6 +4279,8 @@ reg_coef +
         plot.background = element_rect(fill = "transparent", colour = NA),
         legend.key = element_rect(fill = "transparent", colour = NA),
         legend.background= element_rect(fill = "transparent", colour = NA))
+
+ggsave(filename = "salidas/efectosfijos_estatusocup2.png", dpi = 300, type = "cairo", width = 8, height = 6, bg='white')
 
 
 ```
